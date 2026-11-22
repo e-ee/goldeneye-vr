@@ -38,6 +38,8 @@ static int s_gevrGripPendAge[2], VrGestureGripUse, VrGestureMineGrab, VrForcePul
 typedef struct { int MagSize, AmmoType; } WeaponStats;
 static WeaponStats stats = {30, 1};
 static WeaponStats *get_ptr_item_statistics(int item) { (void)item; return &stats; }
+s32 gevrLsHandActive(s32 hand) { (void)hand; return 0; }
+s32 gevrLnSuppressNormalFire(void) { return 0; }
 #define WEAPONSTATBITFLAG_AMMO_CLIP_LIMIT 1
 static int bondwalkItemCheckBitflags(int item, int flags) { (void)item; (void)flags; return 0; }
 static int rockets;

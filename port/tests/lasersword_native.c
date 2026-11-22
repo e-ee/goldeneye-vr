@@ -131,6 +131,17 @@ static void test_pack_and_audio(const char *packPath)
     }
     assert(energy > 40000);
 
+    gevrLsAudioSetVolume(0.0f);
+    memset(buf, 0, sizeof(buf));
+    gevrLsAudioMix(buf, 512, 22050);
+    for (int i = 0; i < 1024; i++) assert(buf[i] == 0);
+    gevrLsAudioSetVolume(1.0f);
+    memset(buf, 0, sizeof(buf));
+    gevrLsAudioMix(buf, 512, 22050);
+    energy = 0;
+    for (int i = 0; i < 1024; i++) energy += abs(buf[i]);
+    assert(energy > 40000);
+
     for (int sfx = GEVR_LS_SFX_IGNITE; sfx <= GEVR_LS_SFX_CLASH; sfx++) {
         gevrLsAudioReset();
         gevrLsAudioTrigger(sfx, 1.0f);

@@ -108,6 +108,7 @@ int gevrLsAvailable(void);
 const GevrLsPack *gevrLsPackGet(void);
 int gevrLsPackLoadFile(const char *path);
 void gevrLsPackUnload(void);
+void gevrLsPackRefresh(void);
 
 /* 22050 Hz stereo PCM sample mixer reading from loaded pack clips */
 enum {
@@ -118,6 +119,7 @@ enum {
 };
 
 void gevrLsAudioReset(void);
+void gevrLsAudioSetVolume(float volume);
 void gevrLsAudioSetState(int active, float bladeExtend, float swingSpeed01, int thrownSpinning);
 void gevrLsAudioTrigger(int eventId, float intensity);
 void gevrLsAudioMix(short *pcmStereo, int frames, int sampleRate);

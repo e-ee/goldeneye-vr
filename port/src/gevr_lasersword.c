@@ -326,6 +326,12 @@ void gevrLsPackUnload(void)
 {
     lsFreePack(&s_pack);
     s_nextStatSec = 0;
+    gevrLsAudioReset();
+}
+
+void gevrLsPackRefresh(void)
+{
+    if (!s_pack.loaded) s_nextStatSec = 0;
 }
 
 int gevrLsPackLoadFile(const char *path)
@@ -451,9 +457,16 @@ static struct {
     int nextVoice;
 } s_audio;
 
+static float s_audioVol = 1.0f;
+
 static float lsClamp01(float x)
 {
     return x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x;
+}
+
+void gevrLsAudioSetVolume(float volume)
+{
+    s_audioVol = lsClamp01(volume);
 }
 
 static float lsSampleClip(const short *smp, int len, float pos)
@@ -495,7 +508,7 @@ void gevrLsAudioTrigger(int eventId, float intensity)
 
 void gevrLsAudioMix(short *pcmStereo, int frames, int sampleRate)
 {
-    if (!pcmStereo || frames <= 0 || sampleRate <= 0 || !s_pack.loaded) return;
+    if (!pcmStereo || frames <= 0 || sampleRate <= 0 || !s_pack.loaded || s_audioVol <= 0.001f) return;
 
     int anyVoice = 0;
     for (int i = 0; i < GEVR_LS_SFX_VOICES; i++) {
@@ -533,6 +546,7 @@ void gevrLsAudioMix(short *pcmStereo, int frames, int sampleRate)
             sig += lsSampleClip(s_pack.clips[c], len, v->pos) * v->intensity * 0.42f;
             v->pos += (float)s_pack.clipRate[c] * dt;
         }
+        sig *= s_audioVol;
 
         for (int ch = 0; ch < 2; ch++) {
             float out = (float)pcmStereo[n * 2 + ch] * (1.0f / 32768.0f) + sig;

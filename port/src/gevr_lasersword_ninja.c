@@ -427,6 +427,12 @@ void gevrLnPackUnload(void)
 {
     lnFreePack(&s_lnPack);
     s_lnNextStatSec = 0;
+    gevrLnAudioReset();
+}
+
+void gevrLnPackRefresh(void)
+{
+    if (!s_lnPack.loaded) s_lnNextStatSec = 0;
 }
 
 int gevrLnPackLoadFile(const char *path)
@@ -569,9 +575,16 @@ static struct {
     int nextVoice;
 } s_audio;
 
+static float s_lnAudioVol = 1.0f;
+
 static float lnClamp01(float x)
 {
     return x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x;
+}
+
+void gevrLnAudioSetVolume(float volume)
+{
+    s_lnAudioVol = lnClamp01(volume);
 }
 
 static float lnSampleClip(const short *smp, int len, float pos)
@@ -628,7 +641,7 @@ void gevrLnAudioTrigger(int eventId, float intensity)
 
 void gevrLnAudioMix(short *pcmStereo, int frames, int sampleRate)
 {
-    if (!pcmStereo || frames <= 0 || sampleRate <= 0 || !s_lnPack.loaded) return;
+    if (!pcmStereo || frames <= 0 || sampleRate <= 0 || !s_lnPack.loaded || s_lnAudioVol <= 0.001f) return;
 
     int anyVoice = 0;
     for (int i = 0; i < GEVR_LN_SFX_VOICES; i++) {
@@ -707,8 +720,8 @@ void gevrLnAudioMix(short *pcmStereo, int frames, int sampleRate)
 
         const float baseL = (float)pcmStereo[n * 2 + 0] * (1.0f / 32768.0f);
         const float baseR = (float)pcmStereo[n * 2 + 1] * (1.0f / 32768.0f);
-        float outL = baseL + sigL;
-        float outR = baseR + sigR;
+        float outL = baseL + sigL * s_lnAudioVol;
+        float outR = baseR + sigR * s_lnAudioVol;
         if (outL > 1.0f) outL = 1.0f - 0.1f * expf(-(outL - 1.0f));
         else if (outL < -1.0f) outL = -1.0f + 0.1f * expf(outL + 1.0f);
         if (outR > 1.0f) outR = 1.0f - 0.1f * expf(-(outR - 1.0f));

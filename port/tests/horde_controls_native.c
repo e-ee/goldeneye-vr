@@ -20,6 +20,7 @@ int gevrHordeBossNoStun(const ChrRecord *chr) {return boss && chr->damage<chr->m
 u32 randomGetNext(void) {randoms++;return 1;}
 static int weapon_ready=1,shots;
 int gevrHordeXeniaWeapon(ChrRecord *chr) {(void)chr;return weapon_ready;}
+s32 gevrLnIsMeleeNpc(ChrRecord *chr) {(void)chr;return 0;}
 void chrlvFireWeaponRelated(ChrRecord *chr,s32 hand) {(void)chr;(void)hand;shots++;}
 #include "horde_controls_production.h"
 int main(void) {

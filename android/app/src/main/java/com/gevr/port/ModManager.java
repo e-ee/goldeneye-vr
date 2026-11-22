@@ -19,6 +19,8 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -491,13 +493,18 @@ final class ModManager {
 
     /** Each followed pack's latest GitHub release and its file; a failure only logs. */
     private void checkLatest() {
+        Map<String, JSONArray> repoReleases = new HashMap<>();
         for (Pack p : PACKS) {
             if (p.repo == null || (p.questVrOnly && !isQuestVrApk())) continue;
             try {
                 JSONObject o = null;
                 if (p.mod) {
                     // the mods repository's newest release of this mod (newest first)
-                    JSONArray all = new JSONArray(httpGet("https://api.github.com/repos/" + p.repo + "/releases?per_page=50"));
+                    JSONArray all = repoReleases.get(p.repo);
+                    if (all == null) {
+                        all = new JSONArray(httpGet("https://api.github.com/repos/" + p.repo + "/releases?per_page=50"));
+                        repoReleases.put(p.repo, all);
+                    }
                     for (int i = 0; i < all.length() && o == null; i++) {
                         JSONObject r = all.getJSONObject(i);
                         if (!r.optBoolean("draft") && !r.optBoolean("prerelease")

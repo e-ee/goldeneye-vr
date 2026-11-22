@@ -547,10 +547,13 @@ void gevrLsGameTick(s32 ticks60)
             if (s_ls.throwHitCd[i] > 0.0f) s_ls.throwHitCd[i] -= dt;
         }
         float catchPos[3];
-        if (s_ls.vrPoseValid[s_ls.thrown.hand]) {
-            memcpy(catchPos, s_ls.vrHiltW[s_ls.thrown.hand], 12);
-        } else {
-            for (int k = 0; k < 3; k++) catchPos[k] = eye[k] + right[k] * 16.0f - up[k] * 10.0f + fwd[k] * 28.0f;
+        const int catchCtrl = (s_ls.thrown.hand == GUNRIGHT) ? 1 : 0;
+        if (!gevrLsGetHandPoseWorld(catchCtrl, catchPos, NULL, NULL, NULL)) {
+            if (s_ls.vrPoseValid[s_ls.thrown.hand]) {
+                memcpy(catchPos, s_ls.vrHiltW[s_ls.thrown.hand], 12);
+            } else {
+                for (int k = 0; k < 3; k++) catchPos[k] = eye[k] + right[k] * 16.0f - up[k] * 10.0f + fwd[k] * 28.0f;
+            }
         }
         int hitWall = 0;
         if (!s_ls.thrown.returning && pdphysIsReady()) {
@@ -652,6 +655,12 @@ s32 gevrLsInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
 /* Fast3D Rendering                                                           */
 /* -------------------------------------------------------------------------- */
 
+static int lsCanAlloc(Gfx *gdl, int vtxCount, int gfxNeed)
+{
+    const s32 needVtxBytes = (s32)((size_t)vtxCount * sizeof(Vtx)) + 8192;
+    return dynGetFreeVtx() >= needVtxBytes && dynGetFreeGfx(gdl) >= gfxNeed + 256;
+}
+
 static void lsSetVtx(Vtx *v, f32 x, f32 y, f32 z, u32 rgba)
 {
     v->v.ob[0] = (s16)x; v->v.ob[1] = (s16)y; v->v.ob[2] = (s16)z;
@@ -664,6 +673,7 @@ static void lsSetVtx(Vtx *v, f32 x, f32 y, f32 z, u32 rgba)
 
 static Gfx *lsBeginGeom(Gfx *gdl, const float originView[3], float scale, int translucent, int cullBack)
 {
+    if (!lsCanAlloc(gdl, 4, 24)) return NULL;
     Mtxf mf;
     Mtx *mv = dynAllocateMatrix();
     if (!mv) return NULL;
@@ -705,6 +715,7 @@ static void lsBuildBasis(const float tipDir[3], const float refRight[3], float b
 static Gfx *lsDrawBladePass(Gfx *gdl, const float aMm[3], const float dir[3], float lenMm,
                             float r0Mm, float r1Mm, u32 cBase, u32 cTip)
 {
+    if (!lsCanAlloc(gdl, 12, 16)) return gdl;
     Vtx *v = dynAllocateVertices(12);
     if (!v) return gdl;
     float u[3], w[3], f[3];
@@ -728,8 +739,10 @@ static Gfx *lsDrawBladePass(Gfx *gdl, const float aMm[3], const float dir[3], fl
 
 static Gfx *lsDrawPackMesh(Gfx *gdl, const GevrLsPack *pk, const float bx[3], const float by[3], const float bz[3])
 {
+    if (!lsCanAlloc(gdl, pk->triCount * 3, (pk->triCount * 3) / 2 + 24)) return gdl;
     for (int t0 = 0; t0 < pk->triCount; t0 += 10) {
         const int batch = (pk->triCount - t0 > 10) ? 10 : (pk->triCount - t0);
+        if (!lsCanAlloc(gdl, batch * 3, batch + 4)) return gdl;
         Vtx *v = dynAllocateVertices(batch * 3);
         if (!v) return gdl;
         for (int k = 0; k < batch * 3; k++) {
@@ -759,6 +772,7 @@ static Gfx *lsDrawLaserswordView(Gfx *gdl, const GevrLsPack *pk, const float hil
                                  float lenCm, float extend01, int colorIdx, float scale)
 {
     if (!pk || !pk->loaded || !pk->verts) return gdl;
+    if (!lsCanAlloc(gdl, 12 + pk->triCount * 3 + 24, 64 + pk->triCount)) return gdl;
     unsigned int core = 0xFFFFFFFFu, glow = 0x2890FFE8u;
     gevrLsPalette(colorIdx, &core, &glow);
 
@@ -817,7 +831,7 @@ Gfx *gevrLsDrawHand(Gfx *gdl, s32 hand)
     gevrLsPalette(VrLaserswordColor, &core, &glow);
     gdl = lsDrawLaserswordView(gdl, pk, hilt, tipDir, rRef, GEVR_LS_REACH_CM, s_ls.ignite[hand].extend, VrLaserswordColor, s);
 
-    if (w2s && s_ls.trails[hand].count >= 2) {
+    if (w2s && s_ls.trails[hand].count >= 2 && lsCanAlloc(gdl, 4 + s_ls.trails[hand].count * 2, 24 + s_ls.trails[hand].count * 2)) {
         float origV[3];
         lsWorldToView(w2s, s_ls.trails[hand].hilt[0], s, origV);
         Gfx *beg = lsBeginGeom(gdl, origV, s, 1, 0);
@@ -872,7 +886,7 @@ Gfx *gevrLsDrawWorld(Gfx *gdl)
     }
 
     for (int i = 0; i < LS_MAX_SPARKS; i++) {
-        if (!s_ls.sparks[i].used) continue;
+        if (!s_ls.sparks[i].used || !lsCanAlloc(gdl, 15, 32)) continue;
         float pv[3];
         lsWorldToView(w2s, s_ls.sparks[i].pos, s, pv);
         if (pv[2] >= -10.0f) continue;
@@ -892,7 +906,7 @@ Gfx *gevrLsDrawWorld(Gfx *gdl)
     }
 
     for (int i = 0; i < LS_MAX_TRACERS; i++) {
-        if (!s_ls.tracers[i].used) continue;
+        if (!s_ls.tracers[i].used || !lsCanAlloc(gdl, 8, 24)) continue;
         float av[3], bv[3];
         lsWorldToView(w2s, s_ls.tracers[i].from, s, av);
         lsWorldToView(w2s, s_ls.tracers[i].to, s, bv);

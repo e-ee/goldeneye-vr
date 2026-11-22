@@ -31,6 +31,8 @@ static int gevrLnAvailable() {return 1;}
 static int gevrIsQuestVrApk() {return 1;}
 static void gevrLsPackUnload() {}
 static void gevrLnPackUnload() {}
+static void gevrLsPackRefresh() {}
+static void gevrLnPackRefresh() {}
 static bool available;
 static std::string raw;
 static unsigned clockMs;

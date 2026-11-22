@@ -153,7 +153,7 @@ static const char *blockedPassthrough(void) { return vr_passthrough_supported() 
 /* GoldenEye X's guns, or with them off Bean's that have a magazine (gevr_beanmag.h) */
 static const char *blockedReload(void) { return VrGexGuns || gevrBeanIsEnabled() ? NULL : "Needs GoldenEye X or Bean"; }
 static const char *blockedHat(void) { return gevrHatAvailable() ? NULL : "Get it in Mods"; }
-static const char *blockedLasersword(void) { return gevrLsAvailable() ? NULL : "Get it in Mods"; }
+static const char *blockedLasersword(void) { return gevrLsAvailable() ? NULL : "Download pack"; }
 static const char *blockedBeanFill(void) { return gevrTexpackFillAvailable() ? NULL : "Needs an HD pack"; }
 /* hand reload takes B, so grip use stays on with it (bondview2.c gevrHandReloadActive): shown on, not the stored value (headset, test.21) */
 static int forcedGripUse(void) { return VrManualReloading && VrGexGuns; }
@@ -195,10 +195,10 @@ static int shownDismember(void) { return VrRagdolls && VrDismemberment; }
 static int shownRival(void) { return VrRivalNpc != 0; }
 static int shownRivalNormal(void) { return VrRivalNpc != 0 && VrLaserswordNinjaMode == 0; }
 static int shownNinjaNormal(void) { return VrNinjaNpc != 0 && VrLaserswordNinjaMode == 0; }
-static const char *blockedLaserswordNinja(void) { return gevrLnAvailable() ? NULL : "Get it in Mods"; }
+static const char *blockedLaserswordNinja(void) { return gevrLnAvailable() ? NULL : "Download pack"; }
 static const char *blockedLaserswordAlly(void)
 {
-    if (!gevrLnAvailable()) return "Get it in Mods";
+    if (!gevrLnAvailable()) return "Download pack";
     return VrAlly ? NULL : "Needs AI ally";
 }
 static int laserswordModeGet(void) { return VrLaserswordNinjaMode == 1 ? 1 : 0; }

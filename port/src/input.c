@@ -308,7 +308,6 @@ extern f32 gevrWeaponPanelStickX, gevrWeaponPanelStickY;
 f32 gevrMoveStickX, gevrMoveStickY;
 extern s32 gevrWeaponPanelStep;            /* bondview2.c: trigger steps through the wheel's category */
 extern s32 gevrWeaponPanelLeft;            /* bondview2.c, issue #56: the left hand's panel */
-extern int VrLaserswordNinjaMode;
 extern s32 gevrLeftPanelAvailable(void);
 extern void gevrCycleHandWeapon(s32 hand, s32 dir);
 #define GEVR_WEAPON_PANEL_HOLD_MS 350

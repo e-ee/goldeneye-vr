@@ -56,6 +56,8 @@ ITEM_IDS getCurrentPlayerWeaponId(GUNHAND hand) { return player.hands[hand].weap
 ITEM_IDS get_item_in_hand_or_watch_menu(GUNHAND hand) { return getCurrentPlayerWeaponId(hand); }
 /* gun.c's GE-X remote mines: the hand stays on them while any are out */
 int VrGexGuns;
+int VrLasersword, VrLaserswordNinjaMode;
+int gevrLsAvailable(void) { return 0; }
 /* bondview2.c gevrKeepAutoPick: the out-of-ammo pick's keep window on a test clock */
 int VrAutoSwitchKeepMs = 800;
 static u64 nowUs;

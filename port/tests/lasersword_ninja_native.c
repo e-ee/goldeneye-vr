@@ -261,6 +261,17 @@ static void test_pack_and_audio(const char *packPath, const char *badPath)
     }
     assert(energy > 50000);
 
+    gevrLnAudioSetVolume(0.0f);
+    memset(buf, 0, sizeof(buf));
+    gevrLnAudioMix(buf, 512, 22050);
+    for (int i = 0; i < 1024; i++) assert(buf[i] == 0);
+    gevrLnAudioSetVolume(1.0f);
+    memset(buf, 0, sizeof(buf));
+    gevrLnAudioMix(buf, 512, 22050);
+    energy = 0;
+    for (int i = 0; i < 1024; i++) energy += abs(buf[i]);
+    assert(energy > 50000);
+
     /* Every one-shot clip SFX produces bounded nonzero energy and decays cleanly */
     for (int sfx = GEVR_LN_SFX_IGNITE; sfx <= GEVR_LN_SFX_SHADOW_STEP; sfx++) {
         gevrLnAudioReset();

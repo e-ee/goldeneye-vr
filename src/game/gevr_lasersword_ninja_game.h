@@ -12,6 +12,7 @@ void gevrLnGameReset(void);
 void gevrLnGameTick(s32 ticks60);
 Gfx *gevrLnDrawWorld(Gfx *gdl);
 Gfx *gevrLnDrawFirstPerson(Gfx *gdl);
+s32 gevrLnModeActive(void);
 s32 gevrLnInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ);
 s32 gevrLnSuppressNormalFire(void);
 s32 gevrLnHideNormalGun(void);

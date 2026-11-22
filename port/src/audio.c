@@ -280,9 +280,14 @@ void audioEndFrame(void)
                 netVoiceMix(mixed, nextSize / (sizeof(s16) * 2));
 #ifdef GEVR
                 {
+                    extern float VrSfxVolume;
+                    extern void gevrLnAudioSetVolume(float volume);
                     extern void gevrLnAudioMix(short *pcmStereo, int frames, int sampleRate);
-                    gevrLnAudioMix((short *)mixed, (int)(nextSize / (sizeof(s16) * 2)), 22050);
+                    extern void gevrLsAudioSetVolume(float volume);
                     extern void gevrLsAudioMix(short *pcmStereo, int frames, int sampleRate);
+                    gevrLnAudioSetVolume(VrSfxVolume);
+                    gevrLnAudioMix((short *)mixed, (int)(nextSize / (sizeof(s16) * 2)), 22050);
+                    gevrLsAudioSetVolume(VrSfxVolume);
                     gevrLsAudioMix((short *)mixed, (int)(nextSize / (sizeof(s16) * 2)), 22050);
                 }
 #endif

@@ -128,7 +128,7 @@ int VrBeanCommunityEdition = 1;
 int VrBloodPatch = 0;
 /* Mods: Oddjob's hat, on when its file is there (gevr_oddjobhat.c) */
 int VrOddjobHat = 1;
-/* Lasersword & Ninja modes (#270): all off by default. */
+/* Lasersword & Ninja modes: all off by default. */
 int VrLaserswordNinjaMode = 0;
 int VrLaserswordHand = 0;
 int VrLaserswordColor = 0;

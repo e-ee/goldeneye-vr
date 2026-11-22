@@ -1108,6 +1108,10 @@ static const std::vector<ModPack> &gevrPollModPacks(Uint32 now)
                 p.progress = atoi(f[7].c_str());
                 p.message = f[8];
                 if (f.size() > 9) p.update = f[9];
+                if (p.state == "installed") {
+                    if (p.id == "lasersword" && !gevrLsAvailable()) gevrLsPackRefresh();
+                    else if (p.id == "lasersword-ninja" && !gevrLnAvailable()) gevrLnPackRefresh();
+                }
                 packs.push_back(p);
             }
         }

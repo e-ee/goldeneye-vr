@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 /*
- * Quest VR Lasersword and Ninja modes (#270): pure C11 math, gesture,
+ * Quest VR Lasersword and Ninja modes: pure C11 math, gesture,
  * projectile, physics, and downloadable asset pack core, kept free of
  * game-state headers and atan2f/acosf/asinf overrides (see port/include/gevr_pull.h).
  * Units are Perfect Dark / GoldenEye world units (roughly centimetres), Y up.
@@ -225,6 +225,7 @@ int gevrLnAvailable(void);
 const GevrLnPack *gevrLnPackGet(void);
 int gevrLnPackLoadFile(const char *path);
 void gevrLnPackUnload(void);
+void gevrLnPackRefresh(void);
 
 /* Pack clip stereo PCM mixer (22050 Hz mono clips mixed to stereo) */
 enum {
@@ -239,6 +240,7 @@ enum {
 };
 
 void gevrLnAudioReset(void);
+void gevrLnAudioSetVolume(float volume);
 void gevrLnAudioSetState(int active, int isLasersword, float bladeExtend, float swingSpeed01,
                          int forceChokeOrPull, int forceLightning,
                          int thrownSpinning, int thrownIsBoomerang);

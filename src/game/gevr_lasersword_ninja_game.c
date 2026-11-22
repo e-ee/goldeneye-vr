@@ -148,6 +148,7 @@ static s16 s_bladeLockChrnum;
 static float s_shadowDashTimer;
 static float s_shadowDashCd;
 static int s_shadowApplied;
+static float s_shadowSavedBoost = 1.0f;
 static int s_caughtProjIdx = -1;
 static float s_wallSparkCd;
 static float s_swingAudio01;
@@ -259,9 +260,18 @@ static void lnSfx(int eventId, float intensity)
 static void lnRestoreShadowSpeed(void)
 {
     if (s_shadowApplied && g_CurrentPlayer) {
-        g_CurrentPlayer->speedboost = 1.0f;
+        g_CurrentPlayer->speedboost = s_shadowSavedBoost;
         s_shadowApplied = 0;
+        s_shadowSavedBoost = 1.0f;
     }
+}
+
+static int lnSoloQuestReady(void)
+{
+    return gevrIsQuestVrApk()
+        && g_gevrStereo
+        && gevrLnPackGet() != NULL
+        && (!netIsActive() || getPlayerCount() == 1);
 }
 
 static void lnTrailClear(void)
@@ -319,12 +329,14 @@ static int lnProjValidAirborne(int idx)
 
 static int lnModeActive(void)
 {
-    return gevrIsQuestVrApk()
-        && g_gevrStereo
+    return lnSoloQuestReady()
         && VrLaserswordNinjaMode != 0
-        && gevrLnPackGet() != NULL
-        && g_CurrentPlayer != NULL
-        && (!netIsActive() || getPlayerCount() == 1);
+        && g_CurrentPlayer != NULL;
+}
+
+s32 gevrLnModeActive(void)
+{
+    return lnModeActive() ? 1 : 0;
 }
 
 static int lnUsingGunsOverride(void)
@@ -476,7 +488,10 @@ static void lnActivateShadowStep(const float origin[3], const float fwd[3])
     s_shadowDashTimer = 0.65f;
     s_shadowDashCd = 2.2f;
     if (g_CurrentPlayer) {
-        g_CurrentPlayer->speedboost = 1.65f;
+        if (!s_shadowApplied) {
+            s_shadowSavedBoost = g_CurrentPlayer->speedboost > 0.05f ? g_CurrentPlayer->speedboost : 1.0f;
+        }
+        g_CurrentPlayer->speedboost = s_shadowSavedBoost * 1.65f;
         s_shadowApplied = 1;
     }
     const s32 n = get_numguards();
@@ -827,7 +842,7 @@ s32 gevrLnCanPickupProp(PropRecord *prop)
 
 static void lnSpawnSpecialNpcs(void)
 {
-    if (!gevrIsQuestVrApk() || !g_gevrStereo || gevrLnPackGet() == NULL) return;
+    if (!lnSoloQuestReady()) return;
     if (s_specialsSpawned || g_StageNum == LEVELID_TITLE) return;
     const s32 n = get_numguards();
     if (n <= 0) return;
@@ -1050,7 +1065,7 @@ static void lnTickSpecialNpcs(const float playerPos[3], float dt)
 
 s32 gevrLnAllyThink(ChrRecord *ally)
 {
-    if (!gevrIsQuestVrApk() || !g_gevrStereo || gevrLnPackGet() == NULL) return 0;
+    if (!lnSoloQuestReady()) return 0;
     if (!VrAllyLasersword || !lnChrAliveValid(ally, -1)) return 0;
 
     LnSpecialNpc *sp = lnFindSpecial(ally);
@@ -1264,7 +1279,7 @@ void gevrLnGameTick(s32 ticks60)
     }
     if (s_rivalLightningShow > 0.0f) s_rivalLightningShow -= dt;
 
-    if (!lnInGameplay() || !gevrIsQuestVrApk() || !g_gevrStereo || gevrLnPackGet() == NULL) {
+    if (!lnInGameplay() || !lnSoloQuestReady()) {
         s_blocking = 0;
         s_blockHoldSec = 0.0f;
         s_ninjaShieldHeld = 0;
@@ -2083,8 +2098,15 @@ static void lnSetVtx(Vtx *v, f32 x, f32 y, f32 z, u32 rgba)
     v->v.cn[3] = rgba & 0xff;
 }
 
+static int lnCanAlloc(Gfx *gdl, int vtxCount, int gfxNeed)
+{
+    const s32 needVtxBytes = (s32)((size_t)vtxCount * sizeof(Vtx)) + 8192;
+    return dynGetFreeVtx() >= needVtxBytes && dynGetFreeGfx(gdl) >= gfxNeed + 256;
+}
+
 static Gfx *lnBeginGeom(Gfx *gdl, const float originView[3], float scale, int translucent)
 {
+    if (!lnCanAlloc(gdl, 4, 24)) return NULL;
     Mtxf mf;
     Mtx *mv = dynAllocateMatrix();
     if (!mv) return NULL;
@@ -2129,6 +2151,7 @@ static void lnBuildBasis(const float tipDir[3], const float refRight[3], float b
 static Gfx *lnEmitBladePass(Gfx *gdl, const float aMm[3], const float dir[3], float lenMm,
                             float r0Mm, float r1Mm, u32 rgbaBase, u32 rgbaTip)
 {
+    if (!lnCanAlloc(gdl, 12, 16)) return gdl;
     Vtx *v = dynAllocateVertices(12);
     if (!v) return gdl;
     float u[3], f[3], w[3];
@@ -2155,9 +2178,11 @@ static Gfx *lnDrawPackMesh(Gfx *gdl, const GevrLnMesh *mesh, const float bx[3], 
                            float katanaLenCm, int goldTint)
 {
     if (!mesh || !mesh->verts || mesh->triCount <= 0) return gdl;
+    if (!lnCanAlloc(gdl, mesh->triCount * 3, (mesh->triCount * 3) / 2 + 24)) return gdl;
     const float bladeScale = (katanaLenCm > 0.0f) ? fmaxf(0.25f, (katanaLenCm - 24.0f) / (105.0f - 24.0f)) : 1.0f;
     for (int t0 = 0; t0 < mesh->triCount; t0 += 10) {
         const int batch = (mesh->triCount - t0 > 10) ? 10 : (mesh->triCount - t0);
+        if (!lnCanAlloc(gdl, batch * 3, batch + 4)) return gdl;
         Vtx *v = dynAllocateVertices(batch * 3);
         if (!v) return gdl;
         for (int k = 0; k < batch * 3; k++) {
@@ -2196,6 +2221,7 @@ static Gfx *lnDrawLaserswordExView(Gfx *gdl, const float hiltView[3], const floa
     const GevrLnPack *pk = gevrLnPackGet();
     if (!pk) return gdl;
     const GevrLnMesh *hm = &pk->meshes[doubleEnded ? GEVR_LN_MESH_HILT_DOUBLE : GEVR_LN_MESH_HILT_SINGLE];
+    if (!lnCanAlloc(gdl, 4 + hm->triCount * 3, 24 + hm->triCount * 2)) return gdl;
     unsigned int core = 0xFFFFFFFFu, glow = 0x2890FFE8u;
     gevrLnLaserswordPalette(colorIdx, &core, &glow);
 
@@ -2244,6 +2270,7 @@ static Gfx *lnDrawKatanaView(Gfx *gdl, const float hiltView[3], const float dirV
     const GevrLnPack *pk = gevrLnPackGet();
     if (!pk) return gdl;
     const GevrLnMesh *km = &pk->meshes[isGold ? GEVR_LN_MESH_KATANA_GOLD : GEVR_LN_MESH_KATANA_SILVER];
+    if (!lnCanAlloc(gdl, 4 + km->triCount * 3, 24 + km->triCount * 2)) return gdl;
     float bx[3], by[3], bz[3];
     lnBuildBasis(dirView, refRight, bx, by, bz);
     Gfx *beg = lnBeginGeom(gdl, hiltView, scale, 0);
@@ -2256,6 +2283,8 @@ static Gfx *lnDrawShieldView(Gfx *gdl, const float centerView[3], const float ri
 {
     const GevrLnPack *pk = gevrLnPackGet();
     if (!pk) return gdl;
+    const GevrLnMesh *sm = &pk->meshes[GEVR_LN_MESH_SHIELD];
+    if (!lnCanAlloc(gdl, 4 + sm->triCount * 3, 24 + sm->triCount * 2)) return gdl;
     float bx[3], by[3], bz[3];
     lnNorm3(rightView, bx);
     lnNorm3(upView, by);
@@ -2263,7 +2292,7 @@ static Gfx *lnDrawShieldView(Gfx *gdl, const float centerView[3], const float ri
     lnNorm3(bz, bz);
     Gfx *beg = lnBeginGeom(gdl, centerView, scale, 0);
     if (!beg) return gdl;
-    return lnDrawPackMesh(beg, &pk->meshes[GEVR_LN_MESH_SHIELD], bx, by, bz, 0.0f, 0);
+    return lnDrawPackMesh(beg, sm, bx, by, bz, 0.0f, 0);
 }
 
 static Gfx *lnDrawBoomerangView(Gfx *gdl, const float centerView[3], float spinAngle,
@@ -2273,17 +2302,20 @@ static Gfx *lnDrawBoomerangView(Gfx *gdl, const float centerView[3], float spinA
     if (!pk) return gdl;
     const int isGold = (variant == GEVR_LN_BOOM_GOLD_SHURIKEN || variant == GEVR_LN_BOOM_GOLD_WING);
     const int isWing = (variant == GEVR_LN_BOOM_WING || variant == GEVR_LN_BOOM_GOLD_WING);
+    const GevrLnMesh *bm = &pk->meshes[isWing ? GEVR_LN_MESH_WING : GEVR_LN_MESH_SHURIKEN];
+    if (!lnCanAlloc(gdl, 4 + bm->triCount * 3, 24 + bm->triCount * 2)) return gdl;
     const float ca = cosf(spinAngle), sa = sinf(spinAngle);
     const float bx[3] = { ca, 0.0f, sa };
     const float by[3] = { 0.0f, 1.0f, 0.0f };
     const float bz[3] = { -sa, 0.0f, ca };
     Gfx *beg = lnBeginGeom(gdl, centerView, scale, 0);
     if (!beg) return gdl;
-    return lnDrawPackMesh(beg, &pk->meshes[isWing ? GEVR_LN_MESH_WING : GEVR_LN_MESH_SHURIKEN], bx, by, bz, 0.0f, isGold);
+    return lnDrawPackMesh(beg, bm, bx, by, bz, 0.0f, isGold);
 }
 
 static Gfx *lnDrawSparkView(Gfx *gdl, const float centerView[3], float radiusCm, unsigned int rgba, float scale)
 {
+    if (!lnCanAlloc(gdl, 15, 32)) return gdl;
     Gfx *beg = lnBeginGeom(gdl, centerView, scale, 1);
     if (!beg) return gdl;
     gdl = beg;
@@ -2305,10 +2337,11 @@ static Gfx *lnDrawSparkView(Gfx *gdl, const float centerView[3], float radiusCm,
 static Gfx *lnDrawLightningView(Gfx *gdl, const float aView[3], const float bView[3],
                                 unsigned int outerRgba, float scale, int seed)
 {
+    const int segs = 7;
+    if (!lnCanAlloc(gdl, (segs + 1) * 2 + 4, 24 + segs * 2)) return gdl;
     Gfx *beg = lnBeginGeom(gdl, aView, scale, 1);
     if (!beg) return gdl;
     gdl = beg;
-    const int segs = 7;
     Vtx *v = dynAllocateVertices((segs + 1) * 2);
     if (!v) return gdl;
     const float d[3] = {
@@ -2344,6 +2377,7 @@ static void lnWorldToView(const Mtxf *w2s, const float w[3], float s, float out[
 static Gfx *lnDrawTrailWorld(Gfx *gdl, const Mtxf *w2s, const LnBladeTrail *tr, unsigned int rgba, float scale)
 {
     if (!tr || tr->count < 2 || !w2s) return gdl;
+    if (!lnCanAlloc(gdl, tr->count * 2 + 4, 24 + tr->count * 2)) return gdl;
     float origV[3];
     lnWorldToView(w2s, tr->hilt[0], scale, origV);
     Gfx *beg = lnBeginGeom(gdl, origV, scale, 1);
@@ -2380,7 +2414,7 @@ static Gfx *lnDrawTrailWorld(Gfx *gdl, const Mtxf *w2s, const LnBladeTrail *tr, 
 
 static Gfx *lnDrawSmokeView(Gfx *gdl, const float centerView[3], float radiusCm, float alpha01, float scale)
 {
-    if (alpha01 <= 0.02f) return gdl;
+    if (alpha01 <= 0.02f || !lnCanAlloc(gdl, 13, 28)) return gdl;
     Gfx *beg = lnBeginGeom(gdl, centerView, scale, 1);
     if (!beg) return gdl;
     gdl = beg;
@@ -2407,7 +2441,7 @@ static Gfx *lnDrawSmokeView(Gfx *gdl, const float centerView[3], float radiusCm,
 
 Gfx *gevrLnDrawWorld(Gfx *gdl)
 {
-    if (!gevrIsQuestVrApk() || !g_gevrStereo || !gevrLnPackGet() || !g_CurrentPlayer || !lnInGameplay()) return gdl;
+    if (!lnSoloQuestReady() || !g_CurrentPlayer || !lnInGameplay()) return gdl;
     const Mtxf *w2s = camGetWorldToScreenMtxf();
     if (!w2s) return gdl;
     const float s = lnViewScale();

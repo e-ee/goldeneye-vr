@@ -61,6 +61,8 @@ extern int gevrVrReady(void);              /* vr_openxr.cpp, flat_headset.c */
 extern int VrGhostRace, VrSpeedrunTimer;   /* vr_settings_defaults.c */
 extern int VrPlayMode;
 extern int VrBeanModels, VrGexGuns, VrForcePull, VrAlly, VrThirdPerson, VrCampaign, VrMovementSpeed;
+extern int VrLasersword, VrLaserswordNinjaMode, VrRivalNpc, VrRivalInNormalMode, VrNinjaNpc, VrNinjaInNormalMode, VrAllyLasersword;
+extern int gevrIsQuestVrApk(void), gevrLsAvailable(void), gevrLnAvailable(void);
 extern const char gevrBuildId[];
 
 extern struct weapon_firing_animation_table *gevrPlayerBodyChooseAnim(struct player *pl, ChrRecord *chr, s32 crouchpos);
@@ -390,6 +392,7 @@ static s32 s_recDifficulty = -1;
 static s32 s_recCampaign;
 static u8 s_recFlags;        /* every setting the run used at any time (ghostRunFlags) */
 static s32 s_recVrSamples;   /* how many of the run's samples were played in VR */
+static s32 s_recModded;      /* nonzero if Lasersword or Ninja mods were active during the run */
 
 static s8 ghostSpeed(f32 v)
 {
@@ -454,6 +457,19 @@ static u8 ghostRunFlags(void)
     return f;
 }
 
+static s32 ghostGameplayModActive(void)
+{
+    if (!gevrIsQuestVrApk()) return 0;
+    if (VrLasersword && gevrLsAvailable()) return 1;
+    if (gevrLnAvailable())
+    {
+        if (VrLaserswordNinjaMode != 0) return 1;
+        if ((VrRivalNpc && VrRivalInNormalMode) || (VrNinjaNpc && VrNinjaInNormalMode)) return 1;
+        if (VrAlly && VrAllyLasersword) return 1;
+    }
+    return 0;
+}
+
 static s32 ghostGrow(void)
 {
     struct gevrghostsample *n;
@@ -503,6 +519,7 @@ void gevrGhostRecord(void)
         s_recCampaign = VrCampaign;
         s_recFlags = 0;
         s_recVrSamples = 0;
+        s_recModded = 0;
     }
     time60 = getMissiontimer();
     while (s_recCount * GHOST_RATE60 <= time60)
@@ -538,6 +555,7 @@ void gevrGhostRecord(void)
         if (pl->bonddead) s->flags |= GSF_DEAD;
         s_recFlags |= ghostRunFlags();
         if (ghostPlayingVr()) s_recVrSamples++;
+        if (ghostGameplayModActive()) s_recModded = 1;
     }
 }
 
@@ -560,6 +578,11 @@ static void ghostSave(s32 force)
 
     if (s_recCount < 2 || s_recStage < 0 || time60 < 1)
     {
+        return;
+    }
+    if (!force && s_recModded)
+    {
+        sysLogPrintf(LOG_NOTE, "ghost: run used lasersword/ninja mod; not saved");
         return;
     }
     ghostPath(rel, sizeof(rel), s_recCampaign, s_recStage, s_recDifficulty);
@@ -717,6 +740,7 @@ void gevrGhostStageReset(s32 stage)
         s_recStage = -1;
         s_recFlags = 0;
         s_recVrSamples = 0;
+        s_recModded = 0;
     }
 }
 

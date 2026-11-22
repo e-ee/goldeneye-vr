@@ -22,9 +22,20 @@
 extern int VrRagdolls, VrDismemberment, VrBodiesStay, VrDismemberChance;
 extern int VrLasersword, VrLaserswordNinjaMode;
 extern int netHordeActive(void);
+extern bool netIsActive(void);
+extern s32 getPlayerCount(void);
+extern int gevrIsQuestVrApk(void);
+extern int gevrLsAvailable(void);
+extern int gevrLnAvailable(void);
 
-static int rdEnabled(void) { return VrRagdolls != 0 || VrLasersword != 0 || VrLaserswordNinjaMode != 0; }
-static int rdDismemberEnabled(void) { return VrDismemberment != 0 || VrLasersword != 0 || VrLaserswordNinjaMode != 0; }
+static int rdModActive(void)
+{
+    if (!gevrIsQuestVrApk() || (netIsActive() && getPlayerCount() > 1)) return 0;
+    return (VrLasersword != 0 && gevrLsAvailable())
+        || (VrLaserswordNinjaMode != 0 && gevrLnAvailable());
+}
+static int rdEnabled(void) { return VrRagdolls != 0 || rdModActive(); }
+static int rdDismemberEnabled(void) { return VrDismemberment != 0 || rdModActive(); }
 
 /* Bodies kept: Bodies stay, at most RD_BODIES; a Horde run at most a dozen
  * (user, 2026-10-18: "massive slowdowns as bodies pile up" after three

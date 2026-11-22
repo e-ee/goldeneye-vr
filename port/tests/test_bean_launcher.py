@@ -34,6 +34,8 @@ static int gevrLnAvailable() {return 1;}
 static int gevrIsQuestVrApk() {return 1;}
 static void gevrLsPackUnload() {}
 static void gevrLnPackUnload() {}
+static void gevrLsPackRefresh() {}
+static void gevrLnPackRefresh() {}
 #define GEVR_CAMPAIGN_GE 0
 #define GEVR_CAMPAIGN_MIRROR 3
 #define GEVR_CAMPAIGN_MARIO 4

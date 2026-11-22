@@ -17,6 +17,10 @@ int VrLaserswordNinjaMode;
 int VrLasersword;
 static int hordeOn;
 int netHordeActive(void) { return hordeOn; }
+bool netIsActive(void) { return 0; }
+int gevrIsQuestVrApk(void) { return 0; }
+int gevrLsAvailable(void) { return 0; }
+int gevrLnAvailable(void) { return 0; }
 float VrDismemberDamage=2.0f; /* CE's defaults: the cut-rule checks are CE's */
 s32 lvlGetCurrentStageToLoad(void) { return LEVELID_DAM; }
 static float weaponDamage=1;
