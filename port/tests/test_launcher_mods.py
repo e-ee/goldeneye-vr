@@ -25,6 +25,8 @@ static int VrBeanCommunityEdition=1, ceApplied;    /* Bean: the Community Editio
 static int gevrBeanCeApplied() {return ceApplied;}
 static int VrOddjobHat=0;          /* Mods: Oddjob's hat (PR #196), drawn when its pack is listed */
 static int gevrHatAvailable() {return 1;}
+static int VrLasersword=0;
+static int gevrLsAvailable() {return 1;}
 static bool available;
 static std::string raw;
 static unsigned clockMs;
@@ -50,7 +52,7 @@ int main(){
 for(ceApplied=0;ceApplied<2;ceApplied++)
     for(int update=0;update<2;update++)for(bean=0;bean<2;bean++){
         available=bean;raw.clear();
-        for(const char *id : {"ge007-hd","ge007-hd-ai","ge007-bean"})
+        for(const char *id : {"ge007-hd","ge007-hd-ai","ge007-bean","oddjob-hat","lasersword"})
             raw+=std::string(id)+"\tPack\tCredit\tgithub.com/credit\t2026.10.11.1\t374\t"+state+"\t100\t"+
                 (!strcmp(state,"error")?"A long download failure message that exceeds the column width and must stay on one line.":"")+"\t"+(update?"2026.10.11.2":"")+"\n";
         for(int pass=0;pass<3;pass++){

@@ -28,6 +28,8 @@ static int VrBeanCommunityEdition=1, ceApplied=0;
 int gevrBeanCeApplied(){return ceApplied;}
 static int VrOddjobHat=0;          /* Mods: Oddjob's hat (PR #196), drawn when its pack is listed */
 static int gevrHatAvailable() {return 1;}
+static int VrLasersword=0;
+static int gevrLsAvailable() {return 1;}
 #define GEVR_CAMPAIGN_GE 0
 #define GEVR_CAMPAIGN_MIRROR 3
 #define GEVR_CAMPAIGN_MARIO 4

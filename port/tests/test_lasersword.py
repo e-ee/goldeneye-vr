@@ -11,6 +11,10 @@ CXX = shutil.which("g++") or "g++"
 
 with tempfile.TemporaryDirectory(prefix="gevr-lasersword-") as temp:
     temp_dir = Path(temp)
+    pack_bin = temp_dir / "lasersword.bin"
+    subprocess.run([
+        "python3", str(ROOT / "tools/gevr_lasersword_pack.py"), str(pack_bin)
+    ], check=True)
     exe = temp_dir / "lasersword.exe"
     subprocess.run([
         CC, "-std=c11", "-O2", "-Wall", "-Werror",
@@ -19,7 +23,7 @@ with tempfile.TemporaryDirectory(prefix="gevr-lasersword-") as temp:
         str(ROOT / "port/src/gevr_lasersword.c"),
         "-lm", "-o", str(exe),
     ], check=True)
-    subprocess.run([str(exe)], check=True)
+    subprocess.run([str(exe), str(pack_bin)], check=True)
 
     # Verify compatibility when GoldenEye overrides math_atan2f/asinf/acosf.
     game = [str(ROOT / "src/game" / name) for name in ("math_atan2f.c", "math_asinfacosf.c", "math_asinacos.c")]
@@ -35,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix="gevr-lasersword-") as temp:
         *game,
         "-lm", "-o", str(exe),
     ], check=True)
-    subprocess.run([str(exe)], check=True)
+    subprocess.run([str(exe), str(pack_bin)], check=True)
 
     # Verify settings defaults, unmutated ragdoll flags, and Reset all settings.
     stub_dir = temp_dir / "settings"

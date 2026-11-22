@@ -61,6 +61,7 @@ extern void musicTrack1ApplySeqpVol(unsigned short volume);
 extern void musicTrack3ApplySeqpVol(unsigned short volume);
 extern void gevrSndApplySfxVolume(unsigned short volume);
 extern int gevrHatAvailable(void);
+extern int gevrLsAvailable(void);
 extern int gevrBeanIsAvailable(void), gevrBeanIsEnabled(void);
 extern void gevrBeanSetEnabled(int on);
 extern int gevrTexpackFillAvailable(void);
@@ -143,6 +144,7 @@ static const char *blockedPassthrough(void) { return vr_passthrough_supported() 
 /* GoldenEye X's guns, or with them off Bean's that have a magazine (gevr_beanmag.h) */
 static const char *blockedReload(void) { return VrGexGuns || gevrBeanIsEnabled() ? NULL : "Needs GoldenEye X or Bean"; }
 static const char *blockedHat(void) { return gevrHatAvailable() ? NULL : "Get it in Mods"; }
+static const char *blockedLasersword(void) { return gevrLsAvailable() ? NULL : "Get it in Mods"; }
 static const char *blockedBeanFill(void) { return gevrTexpackFillAvailable() ? NULL : "Needs an HD pack"; }
 /* hand reload takes B, so grip use stays on with it (bondview2.c gevrHandReloadActive): shown on, not the stored value (headset, test.21) */
 static int forcedGripUse(void) { return VrManualReloading && VrGexGuns; }
@@ -395,7 +397,7 @@ static const char *const s_allyMoodNames[] = { "Cautious", "Normal", "Aggressive
 
 static const int s_lsEight[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
 static const char *const s_lsColorNames[] = { "Blue", "Green", "Red", "Purple", "Yellow", "White", "Orange", "Gold" };
-static int shownLasersword(void) { return VrLasersword != 0; }
+static int shownLasersword(void) { return VrLasersword != 0 && gevrLsAvailable(); }
 
 #define L(x) ((x) + 1)   /* a row's launcher place, when not its section's */
 
@@ -690,7 +692,7 @@ static const Row s_rows[] = {
     { .label = "Oddjob's hat", .tooltip = "Oddjob's hat in place of the throwing knife.", .kind = GEVR_SET_TOGGLE,
       .section = GEVR_SEC_MODS, .where = GEVR_SET_INGAME, .ivar = &VrOddjobHat, .def = NAN, .blocked = blockedHat },
     { .label = "Lasersword", .tooltip = "Adds a Lasersword melee weapon with deflection, throwing and dismemberment.", .kind = GEVR_SET_TOGGLE,
-      .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLasersword, .def = NAN },
+      .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLasersword, .def = NAN, .blocked = blockedLasersword },
     { .label = "  Blade colour", .tooltip = "Your lasersword blade colour.", .kind = GEVR_SET_CHOICE,
       .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLaserswordColor,
       .ivalues = s_lsEight, .names = s_lsColorNames, .count = 8, .def = NAN, .shown = shownLasersword },

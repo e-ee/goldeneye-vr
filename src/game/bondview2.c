@@ -18382,6 +18382,8 @@ static s32 gevrWpAddItem(s32 n, s32 hand, s32 item, s32 inv, const char *name)
 static s32 gevrWeaponBuildList(s32 hand)
 {
     extern int VrLasersword;
+    extern int gevrLsAvailable(void);
+    const s32 lsName = VrLasersword && gevrLsAvailable();
     s32 i, n = 0;
     s32 count = bondinvCountTotalItemsInInv();
     if (hand == GUNLEFT)
@@ -18390,7 +18392,7 @@ static s32 gevrWeaponBuildList(s32 hand)
     for (i = 0; i < count; i++)
     {
         s32 item = bondinvGetTextbyInvIndex(i);
-        const char *nm = (VrLasersword && item == ITEM_KNIFE) ? "Lasersword\n" : (const char *) bondinvGetNameByIndex(i);
+        const char *nm = (lsName && item == ITEM_KNIFE) ? "Lasersword\n" : (const char *) bondinvGetNameByIndex(i);
         n = gevrWpAddItem(n, hand, item, i, nm);
     }
     /* Weapons carried only in a native pair still get one distinct entry. */
@@ -18398,7 +18400,7 @@ static s32 gevrWeaponBuildList(s32 hand)
     {
         if (gevrLeftHasGun(i))
         {
-            const char *nm = (VrLasersword && i == ITEM_KNIFE) ? "Lasersword\n" : (const char *) get_ptr_short_watch_text_for_item(i);
+            const char *nm = (lsName && i == ITEM_KNIFE) ? "Lasersword\n" : (const char *) get_ptr_short_watch_text_for_item(i);
             n = gevrWpAddItem(n, hand, i, -1, nm);
         }
     }
