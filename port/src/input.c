@@ -8,6 +8,7 @@
 #include "gevr_scope.h"
 #include "gevr_gexweapon.h"
 #include "gevr_bodyslot.h"
+#include "gevr_lasersword.h"
 #endif
 #include <string.h>
 #include <stddef.h>
@@ -2243,12 +2244,15 @@ s32 inputReadController(s32 idx, OSContPad *npad)
                 s_soloPadSlot = k;
             }
         }
+        bool flatTouchFire = false, flatTouchAim = false;
         /* The on-screen touch controls (port/flat/window/flat_touch.cpp, from
          * Midas-ios and PD Android): the floating stick as a pad's left stick,
          * except in menus, where it moves GoldenEye's cursor and FIRE selects. */
         {
             f32 tx, ty;
             const unsigned touch = flatTouchPoll(menu, &tx, &ty);
+            flatTouchFire = (touch & TOUCH_FIRE) != 0;
+            flatTouchAim = (touch & TOUCH_AIM) != 0;
             if (touch & TOUCH_FIRE) npad->button |= menu ? A_BUTTON : Z_TRIG;
             if (touch & TOUCH_AIM) npad->button |= R_TRIG;
             if (touch & (TOUCH_USE | TOUCH_RELOAD)) npad->button |= B_BUTTON;
@@ -2332,6 +2336,31 @@ s32 inputReadController(s32 idx, OSContPad *npad)
                 npad->stick_x = npad->stick_y = 0;
             }
             if (t < s_gevrStartUntil) npad->button |= START_BUTTON;
+        }
+        /* Flat controller & mouse triggers for Lasersword */
+        if (!menu && !gevrNativePauseOpen()) {
+            extern s32 gevrLsHandActive(s32 hand);
+            bool padRt = false, padLt = false, mouseRt = false, mouseLt = false;
+            for (s32 k = 0; k < INPUT_MAX_CONTROLLERS; ++k) {
+                if (k != 0 && !(inputSoloSlots(idx) & (1 << k))) continue;
+                SDL_GameController *p = pads[k];
+                if (!p) continue;
+                if (SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > TRIG_THRESHOLD) padRt = true;
+                if (SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > TRIG_THRESHOLD) padLt = true;
+            }
+#ifdef GEVR_PC_FLAT
+            mouseRt = (mouseButtons & SDL_BUTTON_LMASK) != 0;
+            mouseLt = (mouseButtons & SDL_BUTTON_RMASK) != 0;
+#endif
+            const bool rtNow = padRt || mouseRt || flatTouchFire;
+            const bool ltNow = padLt || mouseLt || flatTouchAim;
+            gevrLsInputFeedFlat(rtNow ? 1 : 0, ltNow ? 1 : 0,
+                                (mouseRt || mouseLt) && !(padRt || padLt || flatTouchFire || flatTouchAim) ? 1 : 0);
+            if (gevrLsHandActive(GUNRIGHT)) {
+                npad->button &= ~(Z_TRIG | R_TRIG);
+            }
+        } else {
+            gevrLsInputFeedFlat(0, 0, 0);
         }
     } else if (!netIsActive() && idx < INPUT_MAX_CONTROLLERS && pads[idx]) {
         /*
@@ -3365,6 +3394,15 @@ s32 inputReadController(s32 idx, OSContPad *npad)
         npad->button &= ~(Z_TRIG | A_BUTTON | B_BUTTON | L_CBUTTONS | R_CBUTTONS | U_CBUTTONS | D_CBUTTONS);
         gevrTurnAxis = 0;
         if (gevrCoopLocalDowned()) gevrVrTriggerDown[0] = gevrVrTriggerDown[1] = 0;
+    }
+    if (!gevrNativePauseOpen() && !gevrWeaponPanelOpen
+        && g_CurrentPlayer && !g_CurrentPlayer->mpmenuon && bossGetStageNum() != LEVELID_TITLE) {
+        extern s32 gevrLsHandActive(s32 hand);
+        const int activeR = gevrLsHandActive(GUNRIGHT) != 0;
+        const int activeL = gevrLsHandActive(GUNLEFT) != 0;
+        if (activeL) gevrVrTriggerDown[0] = 0;
+        if (activeR) gevrVrTriggerDown[1] = 0;
+        if (activeR && !gevrVrTriggerDown[0]) npad->button &= ~Z_TRIG;
     }
     if (npad->button != 0 || npad->stick_x != 0 || npad->stick_y != 0 || npad->rstick_x != 0 || npad->rstick_y != 0) {
         netTouchLocalActivity();

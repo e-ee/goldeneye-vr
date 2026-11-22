@@ -19,7 +19,11 @@
 #include "random.h"
 
 extern int VrRagdolls, VrDismemberment, VrBodiesStay, VrDismemberChance;
+extern int VrLasersword;
 extern int netHordeActive(void);
+
+static int rdEnabled(void) { return VrRagdolls != 0 || VrLasersword != 0; }
+static int rdDismemberEnabled(void) { return VrDismemberment != 0 || VrLasersword != 0; }
 
 /* Bodies kept: Bodies stay, at most RD_BODIES; a Horde run at most a dozen
  * (user, 2026-10-18: "massive slowdowns as bodies pile up" after three
@@ -162,7 +166,7 @@ void gevrRagdollForgetChr(ChrRecord *chr)
 
 int gevrRagdollNeedsPose(ChrRecord *chr)
 {
-    if (!VrRagdolls || s_failed || !chr || !chr->model || !chr->model->obj) return 0;
+    if (!rdEnabled() || s_failed || !chr || !chr->model || !chr->model->obj) return 0;
     RdSeen *s=rdSeen(chr,1);
     if (!s) return 0;
     if (!rdDead(chr)) { s->suppressed=s->attempted=0; return 0; }
@@ -172,7 +176,7 @@ int gevrRagdollNeedsPose(ChrRecord *chr)
 
 int gevrRagdollSuppress(ChrRecord *chr)
 {
-    if (!VrRagdolls || !rdDead(chr)) return 0;
+    if (!rdEnabled() || !rdDead(chr)) return 0;
     RdSeen *s=rdSeen(chr,0);
     return s && s->suppressed;
 }
@@ -218,7 +222,7 @@ static void rdVolleyHit(ChrRecord *chr, RdBody *body, int skelpart, const float 
 
 void gevrRagdollNoteHit(ChrRecord *chr, int matrix, int hitpart, const float dir[3], int weapon)
 {
-    if (!VrRagdolls || !chr || !dir || gevrRagdollSuppress(chr)) return;
+    if (!rdEnabled() || !chr || !dir || gevrRagdollSuppress(chr)) return;
     RdSeen *s=rdSeen(chr,1);
     if (!s) return;
     if(!rdDead(chr))s->suppressed=s->attempted=0;
@@ -393,7 +397,7 @@ static int rdHitPart(RdBody *rd, RdSeen *s)
 static int rdCutForHit(const RdBody *rd, int part, int weapon)
 {
     float damage=rdDamage(weapon);
-    if(!VrDismemberment || part<0 || part>=rd->count || weapon==ITEM_FIST || rdIsShotgun(weapon)
+    if(!rdDismemberEnabled() || part<0 || part>=rd->count || weapon==ITEM_FIST || rdIsShotgun(weapon)
         || damage<RD_DISMEMBER_DAMAGE || !rdChance(RD_DISMEMBER_CHANCE))return -1;
     if(rd->skel[part]<=1)return damage>=RD_SPLIT_DAMAGE ? rd->body[1] : -1; /* the waist */
     return part;
@@ -414,7 +418,7 @@ static int rdVolleyCut(const RdBody *rd, const int *parts, int hits)
         if(a!=sp)return -1;
         target=sp;
     }
-    return target>1 && VrDismemberment && rdChance(RD_DISMEMBER_CHANCE) ? rd->body[target] : -1;
+    return target>1 && rdDismemberEnabled() && rdChance(RD_DISMEMBER_CHANCE) ? rd->body[target] : -1;
 }
 
 static void rdLog(int level, const char *msg) { sysLogPrintf(level==PDPHYS_LOG_ERROR?LOG_ERROR:level==PDPHYS_LOG_WARNING?LOG_WARNING:LOG_NOTE,"%s",msg); }
@@ -469,7 +473,7 @@ static int rdOnScreen(RdBody *b)
 static int rdStart(void)
 {
     if(pdphysIsReady())return 1;
-    if(s_failed || !VrRagdolls || lvlGetCurrentStageToLoad()==LEVELID_TITLE)return 0;
+    if(s_failed || !rdEnabled() || lvlGetCurrentStageToLoad()==LEVELID_TITLE)return 0;
     if(!pdphysInit(rdLog)) { s_failed=1; return 0; }
     const GevrBeanCuts cuts={gevrRagdollModelCut,gevrRagdollPiece,gevrRagdollRemap,gevrRagdollBeanCap,gevrRagdollModelBody};
     gevrBeanSetCuts(&cuts);
@@ -646,7 +650,7 @@ static void rdBlastBody(RdBody *b, const float centre[3], float radius, float da
 {
     static const signed char joints[]={2,3,4,5,6,9,10,11,12,1};
     if(radius<=0)return;
-    for(int i=0,cut=0;VrDismemberment && i<(int)sizeof(joints) && cut<2;i++) {
+    for(int i=0,cut=0;rdDismemberEnabled() && i<(int)sizeof(joints) && cut<2;i++) {
         const int part=joints[i],body=b->body[part];
         if(body<0 || (b->cuts&(1u<<body)))continue;
         float dist=0,reach=part==1 ? radius*0.35f : radius*0.6f;
@@ -674,7 +678,7 @@ static void rdBlastBody(RdBody *b, const float centre[3], float radius, float da
  * its death makes on the next tick */
 void gevrRagdollExplosionChr(ChrRecord *chr, const coord3d *centre, float radius, float damage)
 {
-    if(!VrRagdolls || !chr || !centre || gevrRagdollSuppress(chr))return;
+    if(!rdEnabled() || !chr || !centre || gevrRagdollSuppress(chr))return;
     RdSeen *s=rdSeen(chr,1);
     if(!s)return;
     s->blastTick=g_GlobalTimer?g_GlobalTimer:1;
@@ -686,7 +690,7 @@ void gevrRagdollExplosionChr(ChrRecord *chr, const coord3d *centre, float radius
  * within its reach are thrown and cut */
 void gevrRagdollBlast(const coord3d *centre, float radius, float damage)
 {
-    if(!VrRagdolls || !pdphysIsReady() || !centre || radius<=0)return;
+    if(!rdEnabled() || !pdphysIsReady() || !centre || radius<=0)return;
     for(int i=0;i<RD_BODIES;i++) {
         RdBody *b=&s_bodies[i];
         if(!b->used)continue;
@@ -808,7 +812,7 @@ void gevrRagdollTick(int ticks60)
         if(s_frame-(*m)->retired>=3) { RdMemory *old=*m; *m=old->next; free(old); }
         else m=&(*m)->next;
     }
-    if(!VrRagdolls) {
+    if(!rdEnabled()) {
         if(pdphysIsReady())gevrRagdollReset();
         return;
     }
@@ -906,7 +910,7 @@ static void rdPushPiece(RdBody *b, int part, const float v[3])
 void gevrRagdollShot(ShotData *shot)
 {
     if(s_volley.active){s_volley.pellets++;s_volley.pellethit=0;}
-    if(!VrRagdolls || !pdphysIsReady() || !shot || shot->viewDir.z>=-1e-6f)return;
+    if(!rdEnabled() || !pdphysIsReady() || !shot || shot->viewDir.z>=-1e-6f)return;
     float depth=shot->maxdist;
     for(int i=0;i<10;i++)if(shot->hits[i].prop && shot->hits[i].dist<depth)depth=shot->hits[i].dist;
     float distance=fminf(65535,(depth+shot->viewOrigin.z)/-shot->viewDir.z);
@@ -940,10 +944,10 @@ void gevrRagdollShot(ShotData *shot)
  * handler (CE ragdollShotgunVolleyBegin/End) */
 void gevrRagdollVolley(int begin)
 {
-    if(begin) { memset(&s_volley,0,sizeof(s_volley)); s_volley.active=VrRagdolls; return; }
+    if(begin) { memset(&s_volley,0,sizeof(s_volley)); s_volley.active=rdEnabled(); return; }
     if(!s_volley.active)return;
     s_volley.active=0;
-    if(!VrDismemberment || s_volley.conflict || s_volley.pellets<=0 || s_volley.hits!=s_volley.pellets
+    if(!rdDismemberEnabled() || s_volley.conflict || s_volley.pellets<=0 || s_volley.hits!=s_volley.pellets
         || s_volley.hits>RD_VOLLEY_MAX)return;
     if(s_volley.body) {
         RdBody *b=s_volley.body;
@@ -1007,7 +1011,7 @@ int gevrRagdollRemap(const Model *model,int owner,int matrix,float p[3],float n[
 
 Gfx *gevrRagdollRender(Gfx *gdl)
 {
-    if(!VrRagdolls || !pdphysIsReady())return gdl;
+    if(!rdEnabled() || !pdphysIsReady())return gdl;
     gdl=bgScissorCurrentPlayerViewDefault(gdl);
     sub_GAME_7F073FC8(0); /* the native upright shadow does not follow a falling rig */
     for(int i=0;i<RD_BODIES;i++) {
@@ -1059,4 +1063,49 @@ Gfx *gevrRagdollRender(Gfx *gdl)
         bondviewTransformManyPosToViewMatrix(b->model.render_pos,b->matrices);
     }
     return gdl;
+}
+
+int gevrRagdollForceCutNear(const float pos[3], float radiusCm, const float impulseVel[3], int maxCuts)
+{
+    if(!rdEnabled() || !rdDismemberEnabled() || !pdphysIsReady() || !pos || radiusCm<=0.0f || maxCuts<=0)return 0;
+    const float r2=radiusCm*radiusCm;
+    unsigned int tried[RD_BODIES]={0};
+    int cuts=0;
+    while(cuts<maxCuts) {
+        int bestIdx=-1, bestPart=-1;
+        float bestD2=r2;
+        for(int i=0;i<RD_BODIES;i++) {
+            RdBody *b=&s_bodies[i];
+            if(!b->used || b->handle<0)continue;
+            for(int p=1;p<b->count;p++) {
+                const int sp=b->skel[p];
+                if(sp<=0 || sp>=RD_SKEL || g_RdSkelHuman.cutradius[sp]<=0.0f)continue;
+                if((b->cuts|(tried[i]))&(1u<<p))continue;
+                const float *jp=b->joints[p].m[3];
+                const float dx=jp[0]-pos[0], dy=jp[1]-pos[1], dz=jp[2]-pos[2];
+                const float d2=dx*dx+dy*dy+dz*dz;
+                if(d2<=bestD2) {
+                    bestD2=d2;
+                    bestIdx=i;
+                    bestPart=p;
+                }
+            }
+        }
+        if(bestIdx<0 || bestPart<0)break;
+        RdBody *b=&s_bodies[bestIdx];
+        tried[bestIdx]|=(1u<<bestPart);
+        if(!rdCut(b,bestPart))continue;
+        pdphysRagdollKeepAwake(b->handle,0.5f);
+        b->asleep=0;
+        if(impulseVel) {
+            const float v[3]={
+                impulseVel[0]+(float)((bestPart&1)?90:-90),
+                impulseVel[1]+180.0f,
+                impulseVel[2]+(float)((bestPart&2)?70:-70)
+            };
+            pdphysRagdollAddVelocity(b->handle,bestPart,v);
+        }
+        cuts++;
+    }
+    return cuts;
 }

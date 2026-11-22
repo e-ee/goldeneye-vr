@@ -45,6 +45,7 @@ extern int VrRagdolls, VrDismemberment, VrDismemberChance;
 extern float VrDismemberDamage;
 extern int VrGexGuns;
 extern int VrBeanFillTextures, VrBloodPatch, VrOddjobHat;
+extern int VrLasersword, VrLaserswordColor, VrLaserswordNpcLasers;
 extern int VrEyeMsaa;
 extern int VrPlayMode, VrBodySlotShow, VrCampaign;
 extern int VrAlly, VrAllyWeapon, VrAllyAggression, VrAllyHealth, VrAllyDamage, VrAllyInvincible;
@@ -392,6 +393,10 @@ static const char *const s_allyGunNames[] = { "PP7", "Silenced PP7", "DD44", "KF
                                               "ZMG", "AR33", "RC-P90", "Shotgun", "Automatic shotgun" };
 static const char *const s_allyMoodNames[] = { "Cautious", "Normal", "Aggressive" };
 
+static const int s_lsEight[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+static const char *const s_lsColorNames[] = { "Blue", "Green", "Red", "Purple", "Yellow", "White", "Orange", "Gold" };
+static int shownLasersword(void) { return VrLasersword != 0; }
+
 #define L(x) ((x) + 1)   /* a row's launcher place, when not its section's */
 
 /* Fun (the host's; online the match's, live, and the host's only) */
@@ -684,6 +689,14 @@ static const Row s_rows[] = {
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .where = GEVR_SET_INGAME, .ivar = &VrBloodPatch, .def = NAN },
     { .label = "Oddjob's hat", .tooltip = "Oddjob's hat in place of the throwing knife.", .kind = GEVR_SET_TOGGLE,
       .section = GEVR_SEC_MODS, .where = GEVR_SET_INGAME, .ivar = &VrOddjobHat, .def = NAN, .blocked = blockedHat },
+    { .label = "Lasersword", .tooltip = "Adds a Lasersword melee weapon with deflection, throwing and dismemberment.", .kind = GEVR_SET_TOGGLE,
+      .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLasersword, .def = NAN },
+    { .label = "  Blade colour", .tooltip = "Your lasersword blade colour.", .kind = GEVR_SET_CHOICE,
+      .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLaserswordColor,
+      .ivalues = s_lsEight, .names = s_lsColorNames, .count = 8, .def = NAN, .shown = shownLasersword },
+    { .label = "  NPC laser shots", .tooltip = "Enemy guns and turrets fire visible GoldenEye laser bolts.", .kind = GEVR_SET_TOGGLE,
+      .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLaserswordNpcLasers,
+      .def = NAN, .shown = shownLasersword },
 
     /* Multiplayer > Host > Fun: the host's, live online (applied when the round loads) */
 #define FUN(lab, get, set, tip) \

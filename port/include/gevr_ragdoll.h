@@ -32,6 +32,9 @@ unsigned gevrRagdollModelBody(const struct Model *model);
 int gevrRagdollPiece(const struct Model *model, int matrix);
 int gevrRagdollRemap(const struct Model *model, int owner, int matrix, float p[3], float n[3]);
 void gevrRagdollBeanCap(const struct Model *model, int matrix, const s16 (*rim)[2][3], int nedges, int piece, int other);
+
+/* Lasersword weapon mod: spatial blade dismemberment/decapitation near a 3D hit point. */
+int gevrRagdollForceCutNear(const float pos[3], float radiusCm, const float impulseVel[3], int maxCuts);
 #ifdef __cplusplus
 }
 #endif

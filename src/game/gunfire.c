@@ -1651,6 +1651,16 @@ void CapBeamLengthAndDecideIfRendered(struct BeamRecord *arg0, ITEM_IDS item, co
 
         // Laser beams are rendered more often than other normal weapons
         arg0->unk28 = (-0.1f - ((f32) (u32)randomGetNext() * (1.0f / UINT_MAX) * 0.3f)) * phi_f12_2;
+#ifdef GEVR
+        {
+            extern s32 gevrLsNpcLasersActive(void);
+            if (gevrLsNpcLasersActive())
+            {
+                arg0->unk20 = 0.14f * phi_f12_2;
+                arg0->unk28 = 0.0f;
+            }
+        }
+#endif
     }
     else if (GEVR_ITEM_AS(item) == ITEM_WATCHLASER)
     {
@@ -2911,6 +2921,16 @@ void gunRenderFirstPersonGunModels(Gfx **gdlptr)
             continue;
         }
         gdl = gevrHandTag(gdl, handnum == GUNRIGHT ? 1 : 0);
+        {
+            extern s32 gevrLsHandActive(s32 hand);
+            extern Gfx *gevrLsDrawHand(Gfx *gdl, s32 hand);
+            if (gevrLsHandActive(handnum))
+            {
+                gdl = gevrLsDrawHand(gdl, handnum);
+                gdl = gevrHandTag(gdl, -1);
+                continue;
+            }
+        }
 #endif
 
         if (GEVR_ITEM_AS(item) != ITEM_WATCHLASER)

@@ -43,6 +43,7 @@ extern int VrBloodPatch;
 /* Mods: Oddjob's hat in place of the throwing knife, from the player's own
  * Nightfire capture (port/src/gevr_oddjobhat.c). Saved as OddjobHat. */
 extern int VrOddjobHat;
+extern int VrLasersword, VrLaserswordColor, VrLaserswordNpcLasers;
 extern int VrRagdolls;
 extern int VrDismemberment;
 extern float VrDismemberDamage;

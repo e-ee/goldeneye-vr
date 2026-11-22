@@ -445,6 +445,8 @@ extern "C" void vrSettingsSave(void)
     iniPrintf(f, "BloodPatch=%d\n", VrBloodPatch ? 1 : 0);
     iniPrintf(f, "; 1 = Oddjob's hat in place of the throwing knife, from files/mods/oddjob_hat.bin.\n");
     iniPrintf(f, "OddjobHat=%d\n", VrOddjobHat ? 1 : 0);
+    iniPrintf(f, "Lasersword=%d\nLaserswordColor=%d\nLaserswordNpcLasers=%d\n",
+              VrLasersword ? 1 : 0, VrLaserswordColor, VrLaserswordNpcLasers ? 1 : 0);
     iniPrintf(f, "Ragdolls=%d\n", VrRagdolls ? 1 : 0);
     iniPrintf(f, "Dismemberment=%d\n", VrDismemberment ? 1 : 0);
     iniPrintf(f, "DismemberDamage=%.1f\n", VrDismemberDamage);
@@ -1016,6 +1018,9 @@ extern "C" void vrSettingsLoad(void)
             else if (strcmp(key, "BeanCommunityEdition") == 0) VrBeanCommunityEdition = ival != 0;
             else if (strcmp(key, "BloodPatch") == 0) VrBloodPatch = ival != 0;
             else if (strcmp(key, "OddjobHat") == 0) VrOddjobHat = ival != 0;
+            else if (strcmp(key, "Lasersword") == 0) VrLasersword = ival != 0;
+            else if (strcmp(key, "LaserswordColor") == 0) VrLaserswordColor = ival < 0 ? 0 : ival > 7 ? 7 : ival;
+            else if (strcmp(key, "LaserswordNpcLasers") == 0) VrLaserswordNpcLasers = ival != 0;
             else if (strcmp(key, "Ragdolls") == 0) VrRagdolls = ival != 0;
             else if (strcmp(key, "Dismemberment") == 0) VrDismemberment = ival != 0;
             else if (strcmp(key, "DismemberChance") == 0) VrDismemberChance = ival < 0 ? 0 : ival > 100 ? 100 : ival;

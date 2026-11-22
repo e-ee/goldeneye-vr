@@ -7062,6 +7062,15 @@ s32 objTick(struct PropRecord *prop)
 
 						beam_local->age = 0;
 						beam_local->weaponnum = ITEM_FNP90;
+#ifdef GEVR
+						{
+							extern s32 gevrLsNpcLasersActive(void);
+							if (gevrLsNpcLasersActive())
+							{
+								beam_local->weaponnum = ITEM_LASER;
+							}
+						}
+#endif
 						beam_local->maxdist = dist_local;
 
 						if (dist_local < 500.0f)

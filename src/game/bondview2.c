@@ -1695,6 +1695,100 @@ static s32 gevrGripAxesRaw(s32 ctrl, f32 pos[3], f32 right[3], f32 up[3], f32 ba
     return TRUE;
 }
 
+s32 gevrLsGetGripAxes(s32 ctrl, f32 pos[3], f32 right[3], f32 up[3], f32 back[3])
+{
+    return g_gevrStereo ? gevrGripAxesRaw(ctrl, pos, right, up, back) : FALSE;
+}
+
+static void gevrLsNormVec(f32 v[3])
+{
+    f32 l2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+    if (l2 > 1e-10f)
+    {
+        f32 inv = 1.0f / sqrtf(l2);
+        v[0] *= inv;
+        v[1] *= inv;
+        v[2] *= inv;
+    }
+}
+
+s32 gevrLsGetHandPoseWorld(s32 ctrl, f32 posW[3], f32 rightW[3], f32 upW[3], f32 fwdW[3])
+{
+    Mtxf *v2w = currentPlayerGetViewToWorldMtxf();
+    f32 p[3], r[3], u[3], b[3], s;
+    coord3d c;
+
+    if (!g_gevrStereo || ctrl < 0 || ctrl > 1 || v2w == NULL || !gevrGripAxesRaw(ctrl, p, r, u, b))
+    {
+        return FALSE;
+    }
+    s = D_800364CC > 1e-6f ? D_800364CC : 1.0f;
+    c.x = p[0] / s;
+    c.y = p[1] / s;
+    c.z = p[2] / s;
+    mtx4TransformVecInPlace(v2w, &c);
+    if (posW)
+    {
+        posW[0] = c.x;
+        posW[1] = c.y;
+        posW[2] = c.z;
+    }
+    if (rightW)
+    {
+        c.x = r[0]; c.y = r[1]; c.z = r[2];
+        mtx4RotateVecInPlace(v2w, &c);
+        rightW[0] = c.x; rightW[1] = c.y; rightW[2] = c.z;
+        gevrLsNormVec(rightW);
+    }
+    if (upW)
+    {
+        c.x = u[0]; c.y = u[1]; c.z = u[2];
+        mtx4RotateVecInPlace(v2w, &c);
+        upW[0] = c.x; upW[1] = c.y; upW[2] = c.z;
+        gevrLsNormVec(upW);
+    }
+    if (fwdW)
+    {
+        c.x = -b[0]; c.y = -b[1]; c.z = -b[2];
+        mtx4RotateVecInPlace(v2w, &c);
+        fwdW[0] = c.x; fwdW[1] = c.y; fwdW[2] = c.z;
+        gevrLsNormVec(fwdW);
+    }
+    return TRUE;
+}
+
+static void gevrWorldToLocal(const f32 q[4], const f32 v[3], f32 out[3]);
+
+s32 gevrLsGetHandVelocityWorld(s32 ctrl, f32 velCmS[3])
+{
+    extern float vr_ctrl_quat_play[2][4];
+    extern float vr_ctrl_velocity_play[2][3];
+    extern float vr_head_velocity_play[3];
+    Mtxf *v2w = currentPlayerGetViewToWorldMtxf();
+    f32 at[3], right[3], up[3], back[3], rel[3], loc[3];
+    coord3d v;
+    s32 i;
+
+    if (!g_gevrStereo || ctrl < 0 || ctrl > 1 || velCmS == NULL || v2w == NULL
+        || !gevrGripAxesRaw(ctrl, at, right, up, back))
+    {
+        return FALSE;
+    }
+    for (i = 0; i < 3; i++)
+    {
+        rel[i] = vr_ctrl_velocity_play[ctrl][i] - vr_head_velocity_play[i];
+    }
+    gevrWorldToLocal(vr_ctrl_quat_play[ctrl], rel, loc);
+    v.x = loc[0] * right[0] + loc[1] * back[0] - loc[2] * up[0];
+    v.y = loc[0] * right[1] + loc[1] * back[1] - loc[2] * up[1];
+    v.z = loc[0] * right[2] + loc[1] * back[2] - loc[2] * up[2];
+    mtx4RotateVecInPlace(v2w, &v);
+    velCmS[0] = v.x * 100.0f;
+    velCmS[1] = v.y * 100.0f;
+    velCmS[2] = v.z * 100.0f;
+    return TRUE;
+}
+
 /* Every user of the gun hand's axes comes through here - the gun, its shots,
  * sight, muzzle and scope - so the two-handed aim (issue #35) turns them all,
  * as Perfect Dark VR's vrBuildGunRotation is the one writer of the gun's
@@ -4004,6 +4098,10 @@ void gevrHandChopTick(s32 ctrl)
     static s32 s_pace[2] = { -1, -1 };   /* files/gevr_melee.txt: same hand, other hand */
     static u32 s_read;
     s32 hand = ctrl ? GUNRIGHT : GUNLEFT;
+    {
+        extern s32 gevrLsHandActive(s32 hand);
+        if (gevrLsHandActive(hand)) return;
+    }
     s32 item = getCurrentPlayerWeaponId(hand);
     s32 bare = item == ITEM_UNARMED || item == ITEM_FIST;
     s32 club = item == ITEM_FIST && g_CurrentPlayer->cur_item_weapon_getname == ITEM_SNIPERRIFLE;
@@ -18283,6 +18381,7 @@ static s32 gevrWpAddItem(s32 n, s32 hand, s32 item, s32 inv, const char *name)
 
 static s32 gevrWeaponBuildList(s32 hand)
 {
+    extern int VrLasersword;
     s32 i, n = 0;
     s32 count = bondinvCountTotalItemsInInv();
     if (hand == GUNLEFT)
@@ -18291,13 +18390,17 @@ static s32 gevrWeaponBuildList(s32 hand)
     for (i = 0; i < count; i++)
     {
         s32 item = bondinvGetTextbyInvIndex(i);
-        n = gevrWpAddItem(n, hand, item, i, (const char *) bondinvGetNameByIndex(i));
+        const char *nm = (VrLasersword && item == ITEM_KNIFE) ? "Lasersword\n" : (const char *) bondinvGetNameByIndex(i);
+        n = gevrWpAddItem(n, hand, item, i, nm);
     }
     /* Weapons carried only in a native pair still get one distinct entry. */
     for (i = ITEM_FIST; i < ITEM_BOMBCASE; i++)
     {
         if (gevrLeftHasGun(i))
-            n = gevrWpAddItem(n, hand, i, -1, (const char *) get_ptr_short_watch_text_for_item(i));
+        {
+            const char *nm = (VrLasersword && i == ITEM_KNIFE) ? "Lasersword\n" : (const char *) get_ptr_short_watch_text_for_item(i);
+            n = gevrWpAddItem(n, hand, i, -1, nm);
+        }
     }
     return n;
 }
@@ -22219,6 +22322,13 @@ void record_damage_kills(f32 damage_amount, f32 vectorx, f32 vectorz, s32 player
         {
             damage_dealt *= 0.25f;
         }
+
+#ifdef GEVR
+        {
+            extern s32 gevrLsInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ);
+            if (gevrLsInterceptPlayerDamage(damage_amount, vectorx, vectorz)) return;
+        }
+#endif
 
         if (g_CurrentPlayer->cheatBondInvincible == FALSE)
         {
