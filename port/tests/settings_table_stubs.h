@@ -34,11 +34,11 @@ void inputRumbleTest(int cidx) { (void)cidx; }   /* input.c: the Vibration row's
 float VrGyroSpeed = 1.5f;
 int VrMinesStickToGuards, VrBodiesStay, VrFastReinforcements, VrRagdolls, VrDismemberment, VrDismemberChance = 40;
 int VrGexGuns, VrBeanFillTextures, VrBloodPatch, VrOddjobHat, VrEyeMsaa = 1;
-int VrJediNinjaMode, VrJediHand, VrSaberColor, VrSaberStyle, VrNinjaSword, VrNinjaBoomerang;
-int VrJediForcePowers = 1, VrJediCatchProjectiles = 1, VrJnPerfectParry = 1, VrJnBladeTrails = 1, VrJnAudio = 1;
+int VrLaserswordNinjaMode, VrLaserswordHand, VrLaserswordColor, VrLaserswordStyle, VrNinjaSword, VrNinjaBoomerang;
+int VrLaserswordForcePowers = 1, VrLaserswordCatchProjectiles = 1, VrLnPerfectParry = 1, VrLnBladeTrails = 1, VrLnAudio = 1;
 int VrNinjaShield = 1, VrNinjaRicochet = 1, VrNinjaShadowStep = 1, VrNinjaBulletSlice = 1;
-int VrSithNpc, VrSithInNormalMode, VrSithScale, VrNinjaNpc, VrNinjaInNormalMode, VrAllyJedi;
-int VrJediBlasters = 1, VrJediPickupGuns, VrNinjaPickupGuns;
+int VrRivalNpc, VrRivalInNormalMode, VrRivalScale, VrNinjaNpc, VrNinjaInNormalMode, VrAllyLasersword;
+int VrLaserswordLasers = 1, VrLaserswordPickupGuns, VrNinjaPickupGuns;
 int VrScreenCurved, VrScreenPassthrough, VrRefreshRate, VrSpaceWarp = -1;
 int VrPlayMode = 1, VrCampaign;
 int VrAlly, VrAllyWeapon, VrAllyAggression = 1, VrAllyHealth = 100, VrAllyDamage = 100, VrAllyInvincible;

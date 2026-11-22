@@ -5894,8 +5894,8 @@ void sub_GAME_7F02BFE4(ChrRecord *self, s32 arg1, s32 arg2)
         s32 sfxItem = (s32) chrlvWeaponNumber(temp_v1);
 #ifdef GEVR
         {
-            extern s32 gevrJnBlastersActive(void);
-            if (gevrJnBlastersActive() && sfxItem != ITEM_ROCKETLAUNCH && sfxItem != ITEM_GRENADELAUNCH)
+            extern s32 gevrLnLasersActive(void);
+            if (gevrLnLasersActive() && sfxItem != ITEM_ROCKETLAUNCH && sfxItem != ITEM_GRENADELAUNCH)
             {
                 sfxItem = ITEM_LASER;
             }
@@ -7284,8 +7284,8 @@ void chrlvFireWeaponRelated(ChrRecord *self, s32 hand)
                                 case ITEM_AUTOSHOT:
                                 case ITEM_SNIPERRIFLE:
                                 {
-                                    extern s32 gevrJnBlastersActive(void);
-                                    sp264 = gevrJnBlastersActive() ? 1 : 0;
+                                    extern s32 gevrLnLasersActive(void);
+                                    sp264 = gevrLnLasersActive() ? 1 : 0;
                                     break;
                                 }
 #endif
@@ -7301,8 +7301,8 @@ void chrlvFireWeaponRelated(ChrRecord *self, s32 hand)
                             ITEM_IDS beamItem = chrlvWeaponNumber(prop_selfchr);
 #ifdef GEVR
                             {
-                                extern s32 gevrJnBlastersActive(void);
-                                if (gevrJnBlastersActive())
+                                extern s32 gevrLnLasersActive(void);
+                                if (gevrLnLasersActive())
                                 {
                                     beamItem = ITEM_LASER;
                                 }
@@ -7332,8 +7332,8 @@ void chrlvTriggerFireWeapon(ChrRecord *self)
     self->hidden &= ~CHRHIDDEN_FIRE_TRACER;
 #ifdef GEVR
     {
-        extern s32 gevrJnIsMeleeNpc(ChrRecord *chr);
-        if (!gevrHordeXeniaWeapon(self) || gevrJnIsMeleeNpc(self)) {
+        extern s32 gevrLnIsMeleeNpc(ChrRecord *chr);
+        if (!gevrHordeXeniaWeapon(self) || gevrLnIsMeleeNpc(self)) {
             self->hidden &= ~(CHRHIDDEN_FIRE_WEAPON_RIGHT | CHRHIDDEN_FIRE_WEAPON_LEFT);
             return;
         }

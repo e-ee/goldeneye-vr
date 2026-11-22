@@ -46,7 +46,7 @@ enum {
     GEVR_LSEC_SCREEN,
     GEVR_LSEC_RULES,       /* Rules > Game rules */
     GEVR_LSEC_ALLY,        /* Rules > AI ally */
-    GEVR_LSEC_JEDI,        /* Rules > Jedi */
+    GEVR_LSEC_LASERSWORD,        /* Rules > Lasersword */
     GEVR_LSEC_NINJA,       /* Rules > Ninja */
     GEVR_LSEC_CHEATS,      /* Rules > Cheats */
     GEVR_LSEC_MODS,

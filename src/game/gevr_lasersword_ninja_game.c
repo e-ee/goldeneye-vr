@@ -1,5 +1,5 @@
-#include "gevr_jedi_ninja_game.h"
-#include "gevr_jedi_ninja.h"
+#include "gevr_lasersword_ninja_game.h"
+#include "gevr_lasersword_ninja.h"
 #include "gevr_ragdoll.h"
 #include "gevr_ally.h"
 #include "pdphysics.h"
@@ -22,15 +22,15 @@
 #include "random.h"
 #include "chrai.h"
 
-extern int VrJediNinjaMode, VrJediHand, VrSaberColor, VrSaberStyle, VrNinjaSword, VrNinjaBoomerang;
-extern int VrJediForcePowers, VrJediCatchProjectiles, VrJnPerfectParry, VrJnBladeTrails, VrJnAudio;
+extern int VrLaserswordNinjaMode, VrLaserswordHand, VrLaserswordColor, VrLaserswordStyle, VrNinjaSword, VrNinjaBoomerang;
+extern int VrLaserswordForcePowers, VrLaserswordCatchProjectiles, VrLnPerfectParry, VrLnBladeTrails, VrLnAudio;
 extern int VrNinjaShield, VrNinjaRicochet, VrNinjaShadowStep, VrNinjaBulletSlice;
-extern int VrSithNpc, VrSithInNormalMode, VrSithScale, VrNinjaNpc, VrNinjaInNormalMode, VrAllyJedi;
-extern int VrJediBlasters, VrJediPickupGuns, VrNinjaPickupGuns;
+extern int VrRivalNpc, VrRivalInNormalMode, VrRivalScale, VrNinjaNpc, VrNinjaInNormalMode, VrAllyLasersword;
+extern int VrLaserswordLasers, VrLaserswordPickupGuns, VrNinjaPickupGuns;
 extern s32 g_gevrStereo, g_gevrExtraPass, g_StageNum, g_ClockTimer, g_GlobalTimer;
 extern f32 D_800364CC;
 extern s32 g_PlayerIsInTank;
-extern s32 gevrJnSelectedPower, gevrJnSelectedNinjaSlot;
+extern s32 gevrLnSelectedPower, gevrLnSelectedNinjaSlot;
 
 extern bool netIsActive(void);
 extern int netGetLocalSlot(void);
@@ -39,9 +39,9 @@ extern s32 get_cur_playernum(void);
 extern s32 lvlGetControlsLockedFlag(void);
 extern s32 gevrSpectating(void);
 extern s32 gevrCoopLocalDowned(void);
-extern s32 gevrJnGetGripAxes(s32 ctrl, f32 pos[3], f32 right[3], f32 up[3], f32 back[3]);
-extern s32 gevrJnGetHandPoseWorld(s32 ctrl, f32 posW[3], f32 rightW[3], f32 upW[3], f32 fwdW[3]);
-extern s32 gevrJnGetHandVelocityWorld(s32 ctrl, f32 velCmS[3]);
+extern s32 gevrLnGetGripAxes(s32 ctrl, f32 pos[3], f32 right[3], f32 up[3], f32 back[3]);
+extern s32 gevrLnGetHandPoseWorld(s32 ctrl, f32 posW[3], f32 rightW[3], f32 upW[3], f32 fwdW[3]);
+extern s32 gevrLnGetHandVelocityWorld(s32 ctrl, f32 velCmS[3]);
 extern int bondinvAddInvItem(ITEM_IDS item);
 extern s32 currentPlayerEquipWeaponWrapper(GUNHAND hand, s32 next_weapon);
 extern s32 getCurrentPlayerWeaponId(GUNHAND hand);
@@ -56,28 +56,28 @@ extern Gfx *combiner_bayer_lod_perspective(Gfx *gdl);
 /* State                                                                      */
 /* -------------------------------------------------------------------------- */
 
-#define JN_MAX_CUTS      8
-#define JN_MAX_SPARKS    12
-#define JN_MAX_TRACERS   8
-#define JN_MAX_LIGHTNING 3
-#define JN_MAX_SPECIAL   8
-#define JN_MAX_SMOKE     12
-#define JN_TRAIL_SAMPLES 7
-#define JN_VR_HIT_SLOTS  16
+#define LN_MAX_CUTS      8
+#define LN_MAX_SPARKS    12
+#define LN_MAX_TRACERS   8
+#define LN_MAX_LIGHTNING 3
+#define LN_MAX_SPECIAL   8
+#define LN_MAX_SMOKE     12
+#define LN_TRAIL_SAMPLES 7
+#define LN_VR_HIT_SLOTS  16
 
 enum {
-    JN_NPC_SITH = 1,
-    JN_NPC_NINJA = 2,
-    JN_NPC_ALLY_JEDI = 3
+    LN_NPC_RIVAL = 1,
+    LN_NPC_NINJA = 2,
+    LN_NPC_ALLY_LASERSWORD = 3
 };
 
 /* World-space motion ribbon samples pushed once per tick, transformed per eye */
 typedef struct {
     int count;
-    float hilt[JN_TRAIL_SAMPLES][3];
-    float tip[JN_TRAIL_SAMPLES][3];
-    float age[JN_TRAIL_SAMPLES];
-} JnBladeTrail;
+    float hilt[LN_TRAIL_SAMPLES][3];
+    float tip[LN_TRAIL_SAMPLES][3];
+    float age[LN_TRAIL_SAMPLES];
+} LnBladeTrail;
 
 typedef struct {
     int used;
@@ -86,7 +86,7 @@ typedef struct {
     float radius;
     float age;
     float maxAge;
-} JnSmokeCloud;
+} LnSmokeCloud;
 
 typedef struct {
     int used;
@@ -94,7 +94,7 @@ typedef struct {
     float vel[3];
     int cutsLeft;
     float ttl;
-} JnPendingCut;
+} LnPendingCut;
 
 typedef struct {
     int used;
@@ -103,7 +103,7 @@ typedef struct {
     float radius;
     float age;
     float maxAge;
-} JnSpark;
+} LnSpark;
 
 typedef struct {
     int used;
@@ -112,7 +112,7 @@ typedef struct {
     unsigned int rgba;
     float age;
     float maxAge;
-} JnTracer;
+} LnTracer;
 
 typedef struct {
     int used;
@@ -123,7 +123,7 @@ typedef struct {
     int doubleBladed;
     float scale;
     int scaleApplied;
-    GevrJnIgnition ignite;
+    GevrLnIgnition ignite;
     float meleeCd;
     float powerCd;
     float swingTimer;
@@ -131,21 +131,21 @@ typedef struct {
     s32 handTick;
     float handPosW[3];
     float handDirW[3];
-    GevrJnThrown boomerang;
-} JnSpecialNpc;
+    GevrLnThrown boomerang;
+} LnSpecialNpc;
 
-static GevrJnTrigger s_rtTrig, s_ltTrig;
-static GevrJnSlash s_slash, s_offSlash;
-static GevrJnIgnition s_fpIgnite;
-static GevrJnThrown s_thrown;
+static GevrLnTrigger s_rtTrig, s_ltTrig;
+static GevrLnSlash s_slash, s_offSlash;
+static GevrLnIgnition s_fpIgnite;
+static GevrLnThrown s_thrown;
 static int s_blocking;
 static float s_blockHoldSec;
 static int s_ninjaShieldHeld;
 static int s_thrownBounces;
-static float s_saberLockTimer;
-static float s_saberLockPulse;
-static ChrRecord *s_saberLockChr;
-static s16 s_saberLockChrnum;
+static float s_bladeLockTimer;
+static float s_bladeLockPulse;
+static ChrRecord *s_bladeLockChr;
+static s16 s_bladeLockChrnum;
 static float s_shadowDashTimer;
 static float s_shadowDashCd;
 static int s_shadowApplied;
@@ -168,8 +168,8 @@ static int s_vrForceValid;
 static float s_vrForcePosW[3], s_vrForceAimW[3];
 static int s_prevTipValid[2];
 static float s_prevTipW[2][3];
-static ChrRecord *s_vrHitChr[2][JN_VR_HIT_SLOTS];
-static float s_vrHitCd[2][JN_VR_HIT_SLOTS];
+static ChrRecord *s_vrHitChr[2][LN_VR_HIT_SLOTS];
+static float s_vrHitCd[2][LN_VR_HIT_SLOTS];
 
 static ChrRecord *s_chokeChr;
 static s16 s_chokeChrnum;
@@ -180,7 +180,7 @@ static int s_grabBodySlot = -1;
 static int s_thrownBodySlot = -1;
 static float s_thrownBodyAge;
 static float s_thrownBodyStart[3];
-static GevrJnThrownBody s_thrownBody;
+static GevrLnThrownBody s_thrownBody;
 static ChrRecord *s_thrownBodyHit[8];
 static int s_thrownBodyHitCount;
 
@@ -188,8 +188,8 @@ static int s_limbBallSuspended;
 static float s_limbBallPos[3];
 
 static int s_lightningActive;
-static ChrRecord *s_lightningChrs[JN_MAX_LIGHTNING];
-static s16 s_lightningChrnums[JN_MAX_LIGHTNING];
+static ChrRecord *s_lightningChrs[LN_MAX_LIGHTNING];
+static s16 s_lightningChrnums[LN_MAX_LIGHTNING];
 static int s_lightningCount;
 static float s_lightningTickAccum;
 
@@ -197,28 +197,28 @@ static ChrRecord *s_throwHitChr[12];
 static float s_throwHitCd[12];
 static int s_throwHitCount;
 
-static JnPendingCut s_cuts[JN_MAX_CUTS];
-static JnSpark s_sparks[JN_MAX_SPARKS];
-static JnTracer s_tracers[JN_MAX_TRACERS];
-static JnSmokeCloud s_smoke[JN_MAX_SMOKE];
-static JnBladeTrail s_trails[3];
-static JnSpecialNpc s_specials[JN_MAX_SPECIAL];
+static LnPendingCut s_cuts[LN_MAX_CUTS];
+static LnSpark s_sparks[LN_MAX_SPARKS];
+static LnTracer s_tracers[LN_MAX_TRACERS];
+static LnSmokeCloud s_smoke[LN_MAX_SMOKE];
+static LnBladeTrail s_trails[3];
+static LnSpecialNpc s_specials[LN_MAX_SPECIAL];
 static int s_specialsSpawned;
-static int s_blasterGranted;
+static int s_laserGranted;
 static int s_lastStage = -1;
-static float s_sithLightningShow;
-static float s_sithLightningFrom[3], s_sithLightningTo[3];
+static float s_rivalLightningShow;
+static float s_rivalLightningFrom[3], s_rivalLightningTo[3];
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
-static float jnViewScale(void)
+static float lnViewScale(void)
 {
     return (D_800364CC > 1e-6f) ? D_800364CC : 1.0f;
 }
 
-static float jnNorm3(const float v[3], float out[3])
+static float lnNorm3(const float v[3], float out[3])
 {
     const float l2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
     if (l2 < 1e-10f) {
@@ -231,33 +231,33 @@ static float jnNorm3(const float v[3], float out[3])
     return l;
 }
 
-static void jnCross3(const float a[3], const float b[3], float out[3])
+static void lnCross3(const float a[3], const float b[3], float out[3])
 {
     out[0] = a[1] * b[2] - a[2] * b[1];
     out[1] = a[2] * b[0] - a[0] * b[2];
     out[2] = a[0] * b[1] - a[1] * b[0];
 }
 
-static float jnDot3(const float a[3], const float b[3])
+static float lnDot3(const float a[3], const float b[3])
 {
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
-static void jnHaptic(int ctrl, float amp, float dur)
+static void lnHaptic(int ctrl, float amp, float dur)
 {
     if (vr_haptics_ready()) {
         trigger_haptic_vibration_c(ctrl, amp, dur);
     }
 }
 
-static void jnSfx(int eventId, float intensity)
+static void lnSfx(int eventId, float intensity)
 {
-    if (VrJnAudio) {
-        gevrJnAudioTrigger(eventId, intensity);
+    if (VrLnAudio) {
+        gevrLnAudioTrigger(eventId, intensity);
     }
 }
 
-static void jnRestoreShadowSpeed(void)
+static void lnRestoreShadowSpeed(void)
 {
     if (s_shadowApplied && g_CurrentPlayer) {
         g_CurrentPlayer->speedboost = 1.0f;
@@ -265,15 +265,15 @@ static void jnRestoreShadowSpeed(void)
     }
 }
 
-static void jnTrailClear(void)
+static void lnTrailClear(void)
 {
     memset(s_trails, 0, sizeof(s_trails));
 }
 
-static void jnTrailStepAge(float dt)
+static void lnTrailStepAge(float dt)
 {
     for (int t = 0; t < 3; t++) {
-        JnBladeTrail *tr = &s_trails[t];
+        LnBladeTrail *tr = &s_trails[t];
         int keep = 0;
         for (int i = 0; i < tr->count; i++) {
             tr->age[i] += dt;
@@ -287,17 +287,17 @@ static void jnTrailStepAge(float dt)
     }
 }
 
-static void jnTrailPushWorld(int idx, const float hiltW[3], const float tipW[3])
+static void lnTrailPushWorld(int idx, const float hiltW[3], const float tipW[3])
 {
-    if (idx < 0 || idx >= 3 || !VrJnBladeTrails) return;
-    JnBladeTrail *tr = &s_trails[idx];
+    if (idx < 0 || idx >= 3 || !VrLnBladeTrails) return;
+    LnBladeTrail *tr = &s_trails[idx];
     if (tr->count > 0) {
         const float dx = tipW[0] - tr->tip[0][0];
         const float dy = tipW[1] - tr->tip[0][1];
         const float dz = tipW[2] - tr->tip[0][2];
         if (dx * dx + dy * dy + dz * dz < 4.0f * 4.0f) return;
     }
-    const int n = tr->count < JN_TRAIL_SAMPLES ? tr->count : JN_TRAIL_SAMPLES - 1;
+    const int n = tr->count < LN_TRAIL_SAMPLES ? tr->count : LN_TRAIL_SAMPLES - 1;
     for (int i = n; i > 0; i--) {
         memcpy(tr->hilt[i], tr->hilt[i - 1], sizeof(tr->hilt[0]));
         memcpy(tr->tip[i], tr->tip[i - 1], sizeof(tr->tip[0]));
@@ -306,10 +306,10 @@ static void jnTrailPushWorld(int idx, const float hiltW[3], const float tipW[3])
     memcpy(tr->hilt[0], hiltW, sizeof(tr->hilt[0]));
     memcpy(tr->tip[0], tipW, sizeof(tr->tip[0]));
     tr->age[0] = 0.0f;
-    if (tr->count < JN_TRAIL_SAMPLES) tr->count++;
+    if (tr->count < LN_TRAIL_SAMPLES) tr->count++;
 }
 
-static int jnProjValidAirborne(int idx)
+static int lnProjValidAirborne(int idx)
 {
     if (idx < 0 || idx >= PROJECTILES_ARR_MAX) return 0;
     const Projectile *pr = &g_Projectiles[idx];
@@ -318,19 +318,19 @@ static int jnProjValidAirborne(int idx)
     return 1;
 }
 
-static int jnModeActive(void)
+static int lnModeActive(void)
 {
-    return VrJediNinjaMode != 0
+    return VrLaserswordNinjaMode != 0
         && g_CurrentPlayer != NULL
         && (!netIsActive() || getPlayerCount() == 1);
 }
 
-static int jnUsingGunsOverride(void)
+static int lnUsingGunsOverride(void)
 {
-    return VrJediNinjaMode == GEVR_JN_JEDI && gevrJnSelectedPower == GEVR_JN_FORCE_GUNS;
+    return VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && gevrLnSelectedPower == GEVR_LN_FORCE_GUNS;
 }
 
-static int jnInGameplay(void)
+static int lnInGameplay(void)
 {
     if (!g_CurrentPlayer || g_CurrentPlayer->bonddead || g_PlayerIsInTank == 1) return 0;
     if (g_StageNum == LEVELID_TITLE || g_CurrentPlayer->pause_state != 0) return 0;
@@ -339,30 +339,30 @@ static int jnInGameplay(void)
     return 1;
 }
 
-static int jnEffectiveNinjaSword(void)
+static int lnEffectiveNinjaSword(void)
 {
-    if (VrJediNinjaMode != GEVR_JN_NINJA) return VrNinjaSword;
-    const int gold = gevrJnIsGoldSword(VrNinjaSword);
-    switch (gevrJnSelectedNinjaSlot) {
-        case GEVR_JN_NINJA_SLOT_SHORT:
-            return gold ? GEVR_JN_SWORD_GOLD_SHORT : GEVR_JN_SWORD_SHORT;
-        case GEVR_JN_NINJA_SLOT_DUAL:
-            return gold ? GEVR_JN_SWORD_DUAL_GOLD_SHORT : GEVR_JN_SWORD_DUAL_SHORT;
-        case GEVR_JN_NINJA_SLOT_KATANA:
-        case GEVR_JN_NINJA_SLOT_SHIELD:
-        case GEVR_JN_NINJA_SLOT_BOOMERANG:
+    if (VrLaserswordNinjaMode != GEVR_LN_NINJA) return VrNinjaSword;
+    const int gold = gevrLnIsGoldSword(VrNinjaSword);
+    switch (gevrLnSelectedNinjaSlot) {
+        case GEVR_LN_NINJA_SLOT_SHORT:
+            return gold ? GEVR_LN_SWORD_GOLD_SHORT : GEVR_LN_SWORD_SHORT;
+        case GEVR_LN_NINJA_SLOT_DUAL:
+            return gold ? GEVR_LN_SWORD_DUAL_GOLD_SHORT : GEVR_LN_SWORD_DUAL_SHORT;
+        case GEVR_LN_NINJA_SLOT_KATANA:
+        case GEVR_LN_NINJA_SLOT_SHIELD:
+        case GEVR_LN_NINJA_SLOT_BOOMERANG:
         default:
             return VrNinjaSword;
     }
 }
 
-static int jnHasNinjaShield(void)
+static int lnHasNinjaShield(void)
 {
-    return VrJediNinjaMode == GEVR_JN_NINJA && VrNinjaShield != 0
-        && gevrJnSelectedNinjaSlot == GEVR_JN_NINJA_SLOT_SHIELD;
+    return VrLaserswordNinjaMode == GEVR_LN_NINJA && VrNinjaShield != 0
+        && gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_SHIELD;
 }
 
-static int jnChrAliveValid(ChrRecord *c, s16 num)
+static int lnChrAliveValid(ChrRecord *c, s16 num)
 {
     if (!c || !c->prop || !c->model || !c->prop->stan) return 0;
     if (num >= 0 && c->chrnum != num) return 0;
@@ -371,19 +371,19 @@ static int jnChrAliveValid(ChrRecord *c, s16 num)
     return 1;
 }
 
-static int jnIsEnemyGuard(ChrRecord *c)
+static int lnIsEnemyGuard(ChrRecord *c)
 {
-    if (!jnChrAliveValid(c, -1)) return 0;
+    if (!lnChrAliveValid(c, -1)) return 0;
     if (gevrAllyIs(c)) return 0;
     if (c->chrflags & CHRFLAG_COUNT_DEATH_AS_CIVILIAN) return 0;
     if (c->actiontype == ACT_SURRENDER) return 0;
     return 1;
 }
 
-static JnSpecialNpc *jnFindSpecial(ChrRecord *c)
+static LnSpecialNpc *lnFindSpecial(ChrRecord *c)
 {
     if (!c) return NULL;
-    for (int i = 0; i < JN_MAX_SPECIAL; i++) {
+    for (int i = 0; i < LN_MAX_SPECIAL; i++) {
         if (s_specials[i].used && s_specials[i].chr == c && s_specials[i].chrnum == c->chrnum) {
             return &s_specials[i];
         }
@@ -392,7 +392,7 @@ static JnSpecialNpc *jnFindSpecial(ChrRecord *c)
 }
 
 /* Wall, door, and pathblocker/glass line-of-sight verification */
-static int jnHasLos(const float from[3], StandTile *fromStan, const float tileOrigin[3], const float to[3])
+static int lnHasLos(const float from[3], StandTile *fromStan, const float tileOrigin[3], const float to[3])
 {
     if (!from || !to) return 0;
     if (fromStan != NULL) {
@@ -410,11 +410,11 @@ static int jnHasLos(const float from[3], StandTile *fromStan, const float tileOr
     return 1;
 }
 
-static void jnAddSpark(const float pos[3], unsigned int rgba, float radius, float maxAge)
+static void lnAddSpark(const float pos[3], unsigned int rgba, float radius, float maxAge)
 {
     int slot = 0;
     float oldest = -1.0f;
-    for (int i = 0; i < JN_MAX_SPARKS; i++) {
+    for (int i = 0; i < LN_MAX_SPARKS; i++) {
         if (!s_sparks[i].used) { slot = i; break; }
         if (s_sparks[i].age > oldest) { oldest = s_sparks[i].age; slot = i; }
     }
@@ -426,11 +426,11 @@ static void jnAddSpark(const float pos[3], unsigned int rgba, float radius, floa
     s_sparks[slot].maxAge = maxAge;
 }
 
-static void jnAddTracer(const float from[3], const float to[3], unsigned int rgba, float maxAge)
+static void lnAddTracer(const float from[3], const float to[3], unsigned int rgba, float maxAge)
 {
     int slot = 0;
     float oldest = -1.0f;
-    for (int i = 0; i < JN_MAX_TRACERS; i++) {
+    for (int i = 0; i < LN_MAX_TRACERS; i++) {
         if (!s_tracers[i].used) { slot = i; break; }
         if (s_tracers[i].age > oldest) { oldest = s_tracers[i].age; slot = i; }
     }
@@ -442,11 +442,11 @@ static void jnAddTracer(const float from[3], const float to[3], unsigned int rgb
     s_tracers[slot].maxAge = maxAge;
 }
 
-static void jnAddSmoke(const float pos[3], const float vel[3], float radius, float maxAge)
+static void lnAddSmoke(const float pos[3], const float vel[3], float radius, float maxAge)
 {
     int slot = 0;
     float oldest = -1.0f;
-    for (int i = 0; i < JN_MAX_SMOKE; i++) {
+    for (int i = 0; i < LN_MAX_SMOKE; i++) {
         if (!s_smoke[i].used) { slot = i; break; }
         if (s_smoke[i].age > oldest) { oldest = s_smoke[i].age; slot = i; }
     }
@@ -458,7 +458,7 @@ static void jnAddSmoke(const float pos[3], const float vel[3], float radius, flo
     s_smoke[slot].maxAge = maxAge;
 }
 
-static void jnActivateShadowStep(const float origin[3], const float fwd[3])
+static void lnActivateShadowStep(const float origin[3], const float fwd[3])
 {
     if (!VrNinjaShadowStep || s_shadowDashCd > 0.0f) return;
     for (int i = 0; i < 6; i++) {
@@ -469,7 +469,7 @@ static void jnActivateShadowStep(const float origin[3], const float fwd[3])
             origin[2] + sinf(a) * 45.0f + fwd[2] * 25.0f
         };
         const float sv[3] = { cosf(a) * 35.0f, 32.0f + (float)(i % 3) * 10.0f, sinf(a) * 35.0f };
-        jnAddSmoke(sp, sv, 68.0f + (float)(i & 1) * 20.0f, 3.4f);
+        lnAddSmoke(sp, sv, 68.0f + (float)(i & 1) * 20.0f, 3.4f);
     }
     s_shadowDashTimer = 0.65f;
     s_shadowDashCd = 2.2f;
@@ -480,7 +480,7 @@ static void jnActivateShadowStep(const float origin[3], const float fwd[3])
     const s32 n = get_numguards();
     for (s32 i = 0; i < n; i++) {
         ChrRecord *c = &g_ChrSlots[i];
-        if (!jnIsEnemyGuard(c)) continue;
+        if (!lnIsEnemyGuard(c)) continue;
         const float dx = c->prop->pos.x - origin[0];
         const float dy = (c->prop->pos.y + 90.0f) - origin[1];
         const float dz = c->prop->pos.z - origin[2];
@@ -489,16 +489,16 @@ static void jnActivateShadowStep(const float origin[3], const float fwd[3])
         c->chrflags |= CHRFLAG_WAS_DAMAGED;
         if (c->accuracyrating > 25) c->accuracyrating -= 20;
     }
-    jnSfx(GEVR_JN_SFX_SHADOW_STEP, 1.15f);
-    jnHaptic(VrJediHand ? 1 : 0, 0.7f, 0.08f);
+    lnSfx(GEVR_LN_SFX_SHADOW_STEP, 1.15f);
+    lnHaptic(VrLaserswordHand ? 1 : 0, 0.7f, 0.08f);
 }
 
-static void jnQueueCut(const float pos[3], const float vel[3], int maxCuts)
+static void lnQueueCut(const float pos[3], const float vel[3], int maxCuts)
 {
     if (gevrRagdollForceCutNear(pos, 115.0f, vel, maxCuts) > 0) {
         return;
     }
-    for (int i = 0; i < JN_MAX_CUTS; i++) {
+    for (int i = 0; i < LN_MAX_CUTS; i++) {
         if (!s_cuts[i].used) {
             s_cuts[i].used = 1;
             memcpy(s_cuts[i].pos, pos, sizeof(s_cuts[i].pos));
@@ -510,7 +510,7 @@ static void jnQueueCut(const float pos[3], const float vel[3], int maxCuts)
     }
 }
 
-static void jnGetPlayerCameraWorld(float eye[3], float right[3], float up[3], float fwd[3])
+static void lnGetPlayerCameraWorld(float eye[3], float right[3], float up[3], float fwd[3])
 {
     Mtxf *v2w = currentPlayerGetViewToWorldMtxf();
     if (!v2w) {
@@ -524,12 +524,12 @@ static void jnGetPlayerCameraWorld(float eye[3], float right[3], float up[3], fl
     right[0] = v2w->m[0][0]; right[1] = v2w->m[0][1]; right[2] = v2w->m[0][2];
     up[0] = v2w->m[1][0]; up[1] = v2w->m[1][1]; up[2] = v2w->m[1][2];
     fwd[0] = -v2w->m[2][0]; fwd[1] = -v2w->m[2][1]; fwd[2] = -v2w->m[2][2];
-    jnNorm3(right, right);
-    jnNorm3(up, up);
-    jnNorm3(fwd, fwd);
+    lnNorm3(right, right);
+    lnNorm3(up, up);
+    lnNorm3(fwd, fwd);
 }
 
-static void jnGetPlayerTileOrigin(float outOrigin[3], StandTile **outStan)
+static void lnGetPlayerTileOrigin(float outOrigin[3], StandTile **outStan)
 {
     PropRecord *me = getCurrentPlayerProp();
     if (me && me->stan) {
@@ -543,7 +543,7 @@ static void jnGetPlayerTileOrigin(float outOrigin[3], StandTile **outStan)
     }
 }
 
-static void jnMoveChrProp(ChrRecord *c, const float w[3])
+static void lnMoveChrProp(ChrRecord *c, const float w[3])
 {
     PropRecord *prop = c->prop;
     StandTile *tile = prop->stan;
@@ -566,12 +566,12 @@ static void jnMoveChrProp(ChrRecord *c, const float w[3])
     }
 }
 
-static void jnHitGuardWithBlade(ChrRecord *c, const float dir[3], float dmgAmount, int forceCutCount, int isBlade)
+static void lnHitGuardWithBlade(ChrRecord *c, const float dir[3], float dmgAmount, int forceCutCount, int isBlade)
 {
-    if (!jnChrAliveValid(c, -1)) return;
+    if (!lnChrAliveValid(c, -1)) return;
     coord3d d;
     d.x = dir[0]; d.y = dir[1]; d.z = dir[2];
-    JnSpecialNpc *sp = jnFindSpecial(c);
+    LnSpecialNpc *sp = lnFindSpecial(c);
     const s32 wep = (isBlade || forceCutCount > 0) ? ITEM_KNIFE : ITEM_FIST;
     const f32 targetDmg = c->damage + dmgAmount;
 
@@ -592,25 +592,25 @@ static void jnHitGuardWithBlade(ChrRecord *c, const float dir[3], float dmgAmoun
 
     const float cpos[3] = { c->prop->pos.x, c->prop->pos.y + 115.0f, c->prop->pos.z };
     unsigned int core = 0xFFFFFFFFu, glow = 0xFFD040FFu;
-    if (VrJediNinjaMode == GEVR_JN_JEDI) gevrJnSaberPalette(VrSaberColor, &core, &glow);
-    jnAddSpark(cpos, sp ? 0xFFE860FFu : glow, sp ? 28.0f : 22.0f, 0.22f);
+    if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD) gevrLnLaserswordPalette(VrLaserswordColor, &core, &glow);
+    lnAddSpark(cpos, sp ? 0xFFE860FFu : glow, sp ? 28.0f : 22.0f, 0.22f);
     if (forceCutCount > 0 && chrIsDead(c)) {
         const float cutVel[3] = { dir[0] * 420.0f, dir[1] * 260.0f + 160.0f, dir[2] * 420.0f };
-        jnQueueCut(c->prop->pos.f, cutVel, forceCutCount);
+        lnQueueCut(c->prop->pos.f, cutVel, forceCutCount);
     }
 }
 
-static void jnPerformMeleeSweep(const float eye[3], const float fwd[3], float reachCm, float dmg)
+static void lnPerformMeleeSweep(const float eye[3], const float fwd[3], float reachCm, float dmg)
 {
     float pOrigin[3];
     StandTile *pStan = NULL;
-    jnGetPlayerTileOrigin(pOrigin, &pStan);
+    lnGetPlayerTileOrigin(pOrigin, &pStan);
 
     const float reach2 = (reachCm + 55.0f) * (reachCm + 55.0f);
     const s32 n = get_numguards();
     for (s32 i = 0; i < n; i++) {
         ChrRecord *c = &g_ChrSlots[i];
-        if (!jnIsEnemyGuard(c)) continue;
+        if (!lnIsEnemyGuard(c)) continue;
         const float tgt[3] = { c->prop->pos.x, c->prop->pos.y + 100.0f, c->prop->pos.z };
         const float dx = tgt[0] - eye[0];
         const float dy = tgt[1] - eye[1];
@@ -619,16 +619,16 @@ static void jnPerformMeleeSweep(const float eye[3], const float fwd[3], float re
         if (d2 > reach2 || d2 < 1.0f) continue;
         const float d = sqrtf(d2);
         const float to[3] = { dx / d, dy / d, dz / d };
-        if (jnDot3(fwd, to) < 0.35f) continue;
-        if (!jnHasLos(eye, pStan, pOrigin, tgt)) continue;
-        jnHitGuardWithBlade(c, to, dmg, 2, 1);
-        jnHaptic(VrJediHand ? 0 : 1, 0.8f, 0.08f);
+        if (lnDot3(fwd, to) < 0.35f) continue;
+        if (!lnHasLos(eye, pStan, pOrigin, tgt)) continue;
+        lnHitGuardWithBlade(c, to, dmg, 2, 1);
+        lnHaptic(VrLaserswordHand ? 0 : 1, 0.8f, 0.08f);
     }
 }
 
-static int jnVrCanHitChr(int handSlot, ChrRecord *c)
+static int lnVrCanHitChr(int handSlot, ChrRecord *c)
 {
-    for (int i = 0; i < JN_VR_HIT_SLOTS; i++) {
+    for (int i = 0; i < LN_VR_HIT_SLOTS; i++) {
         if (s_vrHitChr[handSlot][i] == c && s_vrHitCd[handSlot][i] > 0.0f) {
             return 0;
         }
@@ -636,11 +636,11 @@ static int jnVrCanHitChr(int handSlot, ChrRecord *c)
     return 1;
 }
 
-static void jnVrMarkHitChr(int handSlot, ChrRecord *c, float cd)
+static void lnVrMarkHitChr(int handSlot, ChrRecord *c, float cd)
 {
     int freeIdx = 0;
     float minCd = 1e9f;
-    for (int i = 0; i < JN_VR_HIT_SLOTS; i++) {
+    for (int i = 0; i < LN_VR_HIT_SLOTS; i++) {
         if (s_vrHitChr[handSlot][i] == c) {
             s_vrHitCd[handSlot][i] = cd;
             return;
@@ -658,41 +658,41 @@ static void jnVrMarkHitChr(int handSlot, ChrRecord *c, float cd)
     s_vrHitCd[handSlot][freeIdx] = cd;
 }
 
-static int jnVrSweepBladeAgainstGuards(int handSlot, const float hiltW[3], const float tipW[3],
+static int lnVrSweepBladeAgainstGuards(int handSlot, const float hiltW[3], const float tipW[3],
                                        const float backTipW[3], int hasBackTip,
                                        const float prevTipW[3], int hasPrevTip,
                                        const float velDirW[3], float dmg, int hapticCtrl)
 {
     float pOrigin[3];
     StandTile *pStan = NULL;
-    jnGetPlayerTileOrigin(pOrigin, &pStan);
+    lnGetPlayerTileOrigin(pOrigin, &pStan);
 
     int hits = 0;
     const s32 n = get_numguards();
     for (s32 i = 0; i < n; i++) {
         ChrRecord *c = &g_ChrSlots[i];
-        if (!jnIsEnemyGuard(c) || !jnVrCanHitChr(handSlot, c)) continue;
+        if (!lnIsEnemyGuard(c) || !lnVrCanHitChr(handSlot, c)) continue;
 
-        JnSpecialNpc *sp = jnFindSpecial(c);
+        LnSpecialNpc *sp = lnFindSpecial(c);
         const float r = (c->chrwidth > 12.0f ? c->chrwidth : 20.0f) + 18.0f;
         const float h = 185.0f * (sp ? sp->scale : 1.0f);
         float hitPt[3];
-        int hit = gevrJnSegmentHitCylinder(hiltW, tipW, c->prop->pos.f, r, h, hitPt);
+        int hit = gevrLnSegmentHitCylinder(hiltW, tipW, c->prop->pos.f, r, h, hitPt);
         if (!hit && hasBackTip) {
-            hit = gevrJnSegmentHitCylinder(hiltW, backTipW, c->prop->pos.f, r, h, hitPt);
+            hit = gevrLnSegmentHitCylinder(hiltW, backTipW, c->prop->pos.f, r, h, hitPt);
         }
         if (!hit && hasPrevTip) {
-            hit = gevrJnSegmentHitCylinder(prevTipW, tipW, c->prop->pos.f, r, h, hitPt);
+            hit = gevrLnSegmentHitCylinder(prevTipW, tipW, c->prop->pos.f, r, h, hitPt);
         }
         if (!hit) continue;
 
         const float tgt[3] = { c->prop->pos.x, c->prop->pos.y + 100.0f, c->prop->pos.z };
-        if (!jnHasLos(hiltW, pStan, pOrigin, tgt)) continue;
+        if (!lnHasLos(hiltW, pStan, pOrigin, tgt)) continue;
 
-        jnVrMarkHitChr(handSlot, c, 0.24f);
-        jnHitGuardWithBlade(c, velDirW, dmg, 2, 1);
-        jnAddSpark(hitPt, 0xFFF480FFu, 22.0f, 0.18f);
-        jnHaptic(hapticCtrl, 0.85f, 0.08f);
+        lnVrMarkHitChr(handSlot, c, 0.24f);
+        lnHitGuardWithBlade(c, velDirW, dmg, 2, 1);
+        lnAddSpark(hitPt, 0xFFF480FFu, 22.0f, 0.18f);
+        lnHaptic(hapticCtrl, 0.85f, 0.08f);
         hits++;
     }
     return hits;
@@ -702,10 +702,10 @@ static int jnVrSweepBladeAgainstGuards(int handSlot, const float hiltW[3], const
 /* Lifecycle & NPC Hand Hooks                                                 */
 /* -------------------------------------------------------------------------- */
 
-void gevrJnGameReset(void)
+void gevrLnGameReset(void)
 {
-    gevrJnTriggerReset(&s_rtTrig);
-    gevrJnTriggerReset(&s_ltTrig);
+    gevrLnTriggerReset(&s_rtTrig);
+    gevrLnTriggerReset(&s_ltTrig);
     memset(&s_slash, 0, sizeof(s_slash));
     memset(&s_offSlash, 0, sizeof(s_offSlash));
     memset(&s_fpIgnite, 0, sizeof(s_fpIgnite));
@@ -717,17 +717,17 @@ void gevrJnGameReset(void)
     memset(s_specials, 0, sizeof(s_specials));
     memset(s_vrHitChr, 0, sizeof(s_vrHitChr));
     memset(s_vrHitCd, 0, sizeof(s_vrHitCd));
-    jnTrailClear();
-    gevrJnAudioReset();
-    jnRestoreShadowSpeed();
+    lnTrailClear();
+    gevrLnAudioReset();
+    lnRestoreShadowSpeed();
     s_blocking = 0;
     s_blockHoldSec = 0.0f;
     s_ninjaShieldHeld = 0;
     s_thrownBounces = 0;
-    s_saberLockTimer = 0.0f;
-    s_saberLockPulse = 0.0f;
-    s_saberLockChr = NULL;
-    s_saberLockChrnum = -1;
+    s_bladeLockTimer = 0.0f;
+    s_bladeLockPulse = 0.0f;
+    s_bladeLockChr = NULL;
+    s_bladeLockChrnum = -1;
     s_shadowDashTimer = 0.0f;
     s_shadowDashCd = 0.0f;
     s_caughtProjIdx = -1;
@@ -755,34 +755,34 @@ void gevrJnGameReset(void)
     s_lightningCount = 0;
     s_throwHitCount = 0;
     s_specialsSpawned = 0;
-    s_blasterGranted = 0;
-    s_sithLightningShow = 0.0f;
+    s_laserGranted = 0;
+    s_rivalLightningShow = 0.0f;
     s_lastStage = g_StageNum;
 }
 
-s32 gevrJnSuppressNormalFire(void)
+s32 gevrLnSuppressNormalFire(void)
 {
-    return jnModeActive() && !jnUsingGunsOverride() && jnInGameplay();
+    return lnModeActive() && !lnUsingGunsOverride() && lnInGameplay();
 }
 
-s32 gevrJnHideNormalGun(void)
+s32 gevrLnHideNormalGun(void)
 {
-    return jnModeActive() && !jnUsingGunsOverride() && jnInGameplay();
+    return lnModeActive() && !lnUsingGunsOverride() && lnInGameplay();
 }
 
-s32 gevrJnBlastersActive(void)
+s32 gevrLnLasersActive(void)
 {
-    return jnModeActive() && VrJediNinjaMode == GEVR_JN_JEDI && VrJediBlasters != 0;
+    return lnModeActive() && VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && VrLaserswordLasers != 0;
 }
 
-s32 gevrJnIsMeleeNpc(ChrRecord *chr)
+s32 gevrLnIsMeleeNpc(ChrRecord *chr)
 {
-    return (jnFindSpecial(chr) != NULL) ? 1 : 0;
+    return (lnFindSpecial(chr) != NULL) ? 1 : 0;
 }
 
-void gevrJnNoteNpcHand(ChrRecord *chr, s32 hand, const Mtxf *handMtxCam)
+void gevrLnNoteNpcHand(ChrRecord *chr, s32 hand, const Mtxf *handMtxCam)
 {
-    JnSpecialNpc *sp = jnFindSpecial(chr);
+    LnSpecialNpc *sp = lnFindSpecial(chr);
     Mtxf *v2w;
     coord3d c, upC, fwdC;
 
@@ -813,16 +813,16 @@ void gevrJnNoteNpcHand(ChrRecord *chr, s32 hand, const Mtxf *handMtxCam)
         upC.y * 0.72f + fwdC.y * 0.68f,
         upC.z * 0.72f + fwdC.z * 0.68f
     };
-    jnNorm3(mix, sp->handDirW);
+    lnNorm3(mix, sp->handDirW);
     sp->handValid = 1;
     sp->handTick = g_GlobalTimer;
 }
 
-s32 gevrJnCanPickupProp(PropRecord *prop)
+s32 gevrLnCanPickupProp(PropRecord *prop)
 {
-    if (!jnModeActive() || prop == NULL || prop->obj == NULL) return 1;
-    if (VrJediNinjaMode == GEVR_JN_JEDI && VrJediPickupGuns != 0) return 1;
-    if (VrJediNinjaMode == GEVR_JN_NINJA && VrNinjaPickupGuns != 0) return 1;
+    if (!lnModeActive() || prop == NULL || prop->obj == NULL) return 1;
+    if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && VrLaserswordPickupGuns != 0) return 1;
+    if (VrLaserswordNinjaMode == GEVR_LN_NINJA && VrNinjaPickupGuns != 0) return 1;
 
     ObjectRecord *obj = prop->obj;
     switch (obj->type) {
@@ -851,17 +851,17 @@ s32 gevrJnCanPickupProp(PropRecord *prop)
     }
 }
 
-static void jnSpawnSpecialNpcs(void)
+static void lnSpawnSpecialNpcs(void)
 {
     if (s_specialsSpawned || g_StageNum == LEVELID_TITLE) return;
     const s32 n = get_numguards();
     if (n <= 0) return;
 
-    const int wantSith = VrSithNpc && (VrJediNinjaMode != 0 || VrSithInNormalMode != 0)
-        ? (VrSithNpc >= 2 ? 3 : 1) : 0;
-    const int wantNinja = VrNinjaNpc && (VrJediNinjaMode != 0 || VrNinjaInNormalMode != 0)
+    const int wantRival = VrRivalNpc && (VrLaserswordNinjaMode != 0 || VrRivalInNormalMode != 0)
+        ? (VrRivalNpc >= 2 ? 3 : 1) : 0;
+    const int wantNinja = VrNinjaNpc && (VrLaserswordNinjaMode != 0 || VrNinjaInNormalMode != 0)
         ? (VrNinjaNpc >= 2 ? 3 : 1) : 0;
-    if (!wantSith && !wantNinja) {
+    if (!wantRival && !wantNinja) {
         s_specialsSpawned = 1;
         return;
     }
@@ -869,7 +869,7 @@ static void jnSpawnSpecialNpcs(void)
     int candidates[128], nc = 0;
     for (s32 i = 0; i < n && nc < 128; i++) {
         ChrRecord *c = &g_ChrSlots[i];
-        if (jnIsEnemyGuard(c) && (c->weapons_held[0] || c->weapons_held[1])) {
+        if (lnIsEnemyGuard(c) && (c->weapons_held[0] || c->weapons_held[1])) {
             candidates[nc++] = i;
         }
     }
@@ -882,30 +882,30 @@ static void jnSpawnSpecialNpcs(void)
     }
 
     int idx = 0, slot = 0;
-    for (int k = 0; k < wantSith && idx < nc && slot < JN_MAX_SPECIAL; k++, idx++) {
+    for (int k = 0; k < wantRival && idx < nc && slot < LN_MAX_SPECIAL; k++, idx++) {
         ChrRecord *c = &g_ChrSlots[candidates[idx]];
-        JnSpecialNpc *sp = &s_specials[slot++];
+        LnSpecialNpc *sp = &s_specials[slot++];
         memset(sp, 0, sizeof(*sp));
         sp->used = 1;
         sp->chr = c;
         sp->chrnum = c->chrnum;
-        sp->kind = JN_NPC_SITH;
-        sp->color = GEVR_JN_COLOR_RED;
+        sp->kind = LN_NPC_RIVAL;
+        sp->color = GEVR_LN_COLOR_RED;
         sp->doubleBladed = ((c->chrnum + g_StageNum) % 3) == 0 ? 1 : 0;
-        sp->scale = gevrJnSithScaleFactor(VrSithScale, (unsigned int)(c->chrnum * 7919 + g_StageNum));
+        sp->scale = gevrLnRivalScaleFactor(VrRivalScale, (unsigned int)(c->chrnum * 7919 + g_StageNum));
         c->maxdamage *= 5.0f;
         if (c->maxdamage < 40.0f) c->maxdamage = 40.0f;
         c->speedrating = 100;
         c->accuracyrating = 90;
     }
-    for (int k = 0; k < wantNinja && idx < nc && slot < JN_MAX_SPECIAL; k++, idx++) {
+    for (int k = 0; k < wantNinja && idx < nc && slot < LN_MAX_SPECIAL; k++, idx++) {
         ChrRecord *c = &g_ChrSlots[candidates[idx]];
-        JnSpecialNpc *sp = &s_specials[slot++];
+        LnSpecialNpc *sp = &s_specials[slot++];
         memset(sp, 0, sizeof(*sp));
         sp->used = 1;
         sp->chr = c;
         sp->chrnum = c->chrnum;
-        sp->kind = JN_NPC_NINJA;
+        sp->kind = LN_NPC_NINJA;
         sp->color = 0;
         sp->scale = 1.0f;
         c->maxdamage *= 2.5f;
@@ -915,16 +915,16 @@ static void jnSpawnSpecialNpcs(void)
     s_specialsSpawned = 1;
 }
 
-static void jnTickSpecialNpcs(const float playerPos[3], float dt)
+static void lnTickSpecialNpcs(const float playerPos[3], float dt)
 {
     float pOrigin[3];
     StandTile *pStan = NULL;
-    jnGetPlayerTileOrigin(pOrigin, &pStan);
+    lnGetPlayerTileOrigin(pOrigin, &pStan);
 
-    for (int i = 0; i < JN_MAX_SPECIAL; i++) {
-        JnSpecialNpc *sp = &s_specials[i];
+    for (int i = 0; i < LN_MAX_SPECIAL; i++) {
+        LnSpecialNpc *sp = &s_specials[i];
         if (!sp->used) continue;
-        if (!jnChrAliveValid(sp->chr, sp->chrnum)) {
+        if (!lnChrAliveValid(sp->chr, sp->chrnum)) {
             sp->used = 0;
             continue;
         }
@@ -933,7 +933,7 @@ static void jnTickSpecialNpcs(const float playerPos[3], float dt)
             modelSetScale(c->model, c->model->scale * sp->scale);
             sp->scaleApplied = 1;
         }
-        gevrJnIgnitionUpdate(&sp->ignite, 1, 0, dt);
+        gevrLnIgnitionUpdate(&sp->ignite, 1, 0, dt);
         if (sp->meleeCd > 0.0f) sp->meleeCd -= dt;
         if (sp->powerCd > 0.0f) sp->powerCd -= dt;
         if (sp->swingTimer > 0.0f) sp->swingTimer -= dt;
@@ -959,15 +959,15 @@ static void jnTickSpecialNpcs(const float playerPos[3], float dt)
                 /* Bullet/projectile travel direction: attacker -> player */
                 const float vx = playerPos[0] - sp->boomerang.pos[0];
                 const float vz = playerPos[2] - sp->boomerang.pos[2];
-                if (!gevrJnInterceptPlayerDamage(1.2f, vx, vz)) {
+                if (!gevrLnInterceptPlayerDamage(1.2f, vx, vz)) {
                     record_damage_kills(1.2f, vx, vz, -1, 1);
                 }
                 sp->boomerang.returning = 1;
             }
-            gevrJnThrownStep(&sp->boomerang, sp->handValid ? sp->handPosW : handPos, hitWall, dt);
+            gevrLnThrownStep(&sp->boomerang, sp->handValid ? sp->handPosW : handPos, hitWall, dt);
         }
 
-        if (sp->kind == JN_NPC_ALLY_JEDI) continue;
+        if (sp->kind == LN_NPC_ALLY_LASERSWORD) continue;
         if (s_chokeActive && s_chokeChr == c) continue; /* suspended & helpless */
 
         const float npcEye[3] = { c->prop->pos.x, c->prop->pos.y + 115.0f * sp->scale, c->prop->pos.z };
@@ -980,7 +980,7 @@ static void jnTickSpecialNpcs(const float playerPos[3], float dt)
         if (c->alertness < 50 && d2 > 900.0f * 900.0f) continue;
 
         const float d = sqrtf(fmaxf(1.0f, d2));
-        const int hasLos = jnHasLos(npcEye, c->prop->stan, c->prop->pos.f, playerPos);
+        const int hasLos = lnHasLos(npcEye, c->prop->stan, c->prop->pos.f, playerPos);
         if (!hasLos) continue;
 
         if (d > 110.0f && g_CurrentPlayer && g_CurrentPlayer->prop && g_CurrentPlayer->prop->stan) {
@@ -989,7 +989,7 @@ static void jnTickSpecialNpcs(const float playerPos[3], float dt)
             }
             /* Ground/stair-validated chase step toward player */
             if (d > 140.0f && d < 1200.0f) {
-                const float spd = (sp->kind == JN_NPC_SITH ? 220.0f : 185.0f) * dt;
+                const float spd = (sp->kind == LN_NPC_RIVAL ? 220.0f : 185.0f) * dt;
                 coord3d probe;
                 probe.x = c->prop->pos.x + (dx / d) * spd;
                 probe.y = c->prop->pos.y + 40.0f;
@@ -1005,67 +1005,67 @@ static void jnTickSpecialNpcs(const float playerPos[3], float dt)
                     if (groundTile && fabsf(groundY - c->prop->pos.y) <= 45.0f) {
                         const float nxt[3] = { probe.x, groundY, probe.z };
                         if (!pdphysIsReady() || !pdphysRaycastAnyRoom(npcEye, nxt, NULL, NULL, NULL)) {
-                            jnMoveChrProp(c, nxt);
+                            lnMoveChrProp(c, nxt);
                         }
                     }
                 }
             }
         }
 
-        /* Melee saber / katana swing */
+        /* Melee lasersword / katana swing */
         const float meleeRange = 145.0f * (sp->scale > 1.0f ? sp->scale : 1.0f);
         if (d <= meleeRange && sp->meleeCd <= 0.0f) {
             sp->swingTimer = 0.28f;
-            if (sp->kind == JN_NPC_SITH && VrJediNinjaMode == GEVR_JN_JEDI
-                && VrJnPerfectParry && (s_blocking || s_slash.active)
-                && jnModeActive() && !jnUsingGunsOverride() && s_saberLockTimer <= 0.0f) {
-                s_saberLockTimer = 0.85f;
-                s_saberLockPulse = 0.0f;
-                s_saberLockChr = c;
-                s_saberLockChrnum = c->chrnum;
+            if (sp->kind == LN_NPC_RIVAL && VrLaserswordNinjaMode == GEVR_LN_LASERSWORD
+                && VrLnPerfectParry && (s_blocking || s_slash.active)
+                && lnModeActive() && !lnUsingGunsOverride() && s_bladeLockTimer <= 0.0f) {
+                s_bladeLockTimer = 0.85f;
+                s_bladeLockPulse = 0.0f;
+                s_bladeLockChr = c;
+                s_bladeLockChrnum = c->chrnum;
                 sp->meleeCd = 1.15f;
                 const float clashPt[3] = {
                     (playerPos[0] + c->prop->pos.x) * 0.5f,
                     c->prop->pos.y + 115.0f * sp->scale,
                     (playerPos[2] + c->prop->pos.z) * 0.5f
                 };
-                jnAddSpark(clashPt, 0xFFF078FFu, 30.0f, 0.25f);
-                jnSfx(GEVR_JN_SFX_CLASH_SABER, 1.3f);
-                jnHaptic(VrJediHand ? 0 : 1, 1.0f, 0.10f);
+                lnAddSpark(clashPt, 0xFFF078FFu, 30.0f, 0.25f);
+                lnSfx(GEVR_LN_SFX_CLASH_LASERSWORD, 1.3f);
+                lnHaptic(VrLaserswordHand ? 0 : 1, 1.0f, 0.10f);
             } else {
                 sp->meleeCd = 0.85f;
                 const float vx = playerPos[0] - c->prop->pos.x;
                 const float vz = playerPos[2] - c->prop->pos.z;
-                if (!gevrJnInterceptPlayerDamage(1.5f, vx, vz)) {
+                if (!gevrLnInterceptPlayerDamage(1.5f, vx, vz)) {
                     record_damage_kills(1.5f, vx, vz, -1, 1);
                 }
             }
         }
 
-        /* Special attack: Sith Force Lightning / Evil Ninja Boomerang */
+        /* Special attack: Rival Force Lightning / Evil Ninja Boomerang */
         if (sp->powerCd <= 0.0f && d > 180.0f && d < 950.0f) {
-            if (sp->kind == JN_NPC_SITH) {
+            if (sp->kind == LN_NPC_RIVAL) {
                 sp->powerCd = 4.5f;
                 const float vx = playerPos[0] - c->prop->pos.x;
                 const float vz = playerPos[2] - c->prop->pos.z;
-                s_sithLightningShow = 0.45f;
+                s_rivalLightningShow = 0.45f;
                 if (sp->handValid) {
-                    memcpy(s_sithLightningFrom, sp->handPosW, sizeof(s_sithLightningFrom));
+                    memcpy(s_rivalLightningFrom, sp->handPosW, sizeof(s_rivalLightningFrom));
                 } else {
-                    s_sithLightningFrom[0] = c->prop->pos.x;
-                    s_sithLightningFrom[1] = c->prop->pos.y + 115.0f * sp->scale;
-                    s_sithLightningFrom[2] = c->prop->pos.z;
+                    s_rivalLightningFrom[0] = c->prop->pos.x;
+                    s_rivalLightningFrom[1] = c->prop->pos.y + 115.0f * sp->scale;
+                    s_rivalLightningFrom[2] = c->prop->pos.z;
                 }
-                memcpy(s_sithLightningTo, playerPos, sizeof(s_sithLightningTo));
-                if (!gevrJnInterceptPlayerDamage(0.9f, vx, vz)) {
+                memcpy(s_rivalLightningTo, playerPos, sizeof(s_rivalLightningTo));
+                if (!gevrLnInterceptPlayerDamage(0.9f, vx, vz)) {
                     record_damage_kills(0.9f, vx, vz, -1, 1);
                 }
-            } else if (sp->kind == JN_NPC_NINJA && !sp->boomerang.active) {
+            } else if (sp->kind == LN_NPC_NINJA && !sp->boomerang.active) {
                 sp->powerCd = 4.2f;
                 const float fallback[3] = { c->prop->pos.x, c->prop->pos.y + 115.0f, c->prop->pos.z };
                 const float *origin = sp->handValid ? sp->handPosW : fallback;
                 const float aim[3] = { dx / d, dy / d, dz / d };
-                gevrJnThrownLaunch(&sp->boomerang, 1, origin, aim);
+                gevrLnThrownLaunch(&sp->boomerang, 1, origin, aim);
             }
         }
     }
@@ -1073,21 +1073,21 @@ static void jnTickSpecialNpcs(const float playerPos[3], float dt)
     (void)pStan;
 }
 
-s32 gevrJnAllyThink(ChrRecord *ally)
+s32 gevrLnAllyThink(ChrRecord *ally)
 {
-    if (!VrAllyJedi || !jnChrAliveValid(ally, -1)) return 0;
+    if (!VrAllyLasersword || !lnChrAliveValid(ally, -1)) return 0;
 
-    JnSpecialNpc *sp = jnFindSpecial(ally);
+    LnSpecialNpc *sp = lnFindSpecial(ally);
     if (!sp) {
-        for (int i = 0; i < JN_MAX_SPECIAL; i++) {
+        for (int i = 0; i < LN_MAX_SPECIAL; i++) {
             if (!s_specials[i].used) {
                 sp = &s_specials[i];
                 memset(sp, 0, sizeof(*sp));
                 sp->used = 1;
                 sp->chr = ally;
                 sp->chrnum = ally->chrnum;
-                sp->kind = JN_NPC_ALLY_JEDI;
-                sp->color = (VrSaberColor == GEVR_JN_COLOR_BLUE) ? GEVR_JN_COLOR_GREEN : GEVR_JN_COLOR_BLUE;
+                sp->kind = LN_NPC_ALLY_LASERSWORD;
+                sp->color = (VrLaserswordColor == GEVR_LN_COLOR_BLUE) ? GEVR_LN_COLOR_GREEN : GEVR_LN_COLOR_BLUE;
                 sp->scale = 1.0f;
                 break;
             }
@@ -1100,13 +1100,13 @@ s32 gevrJnAllyThink(ChrRecord *ally)
         const float allyPt[3] = { ally->prop->pos.x, ally->prop->pos.y + 100.0f, ally->prop->pos.z };
         for (s32 i = 0; i < n; i++) {
             ChrRecord *e = &g_ChrSlots[i];
-            if (!jnIsEnemyGuard(e)) continue;
+            if (!lnIsEnemyGuard(e)) continue;
             const float tgt[3] = { e->prop->pos.x, e->prop->pos.y + 100.0f, e->prop->pos.z };
             const float dx = tgt[0] - allyPt[0];
             const float dy = e->prop->pos.y - ally->prop->pos.y;
             const float dz = tgt[2] - allyPt[2];
             const float d2 = dx * dx + dy * dy + dz * dz;
-            if (d2 < bestD2 && jnHasLos(allyPt, ally->prop->stan, ally->prop->pos.f, tgt)) {
+            if (d2 < bestD2 && lnHasLos(allyPt, ally->prop->stan, ally->prop->pos.f, tgt)) {
                 bestD2 = d2;
                 best = e;
             }
@@ -1118,8 +1118,8 @@ s32 gevrJnAllyThink(ChrRecord *ally)
                 best->prop->pos.z - ally->prop->pos.z
             };
             float nd[3];
-            jnNorm3(dir, nd);
-            jnHitGuardWithBlade(best, nd, 10.0f, 1, 1);
+            lnNorm3(dir, nd);
+            lnHitGuardWithBlade(best, nd, 10.0f, 1, 1);
             sp->swingTimer = 0.28f;
             sp->meleeCd = 0.7f;
         }
@@ -1127,18 +1127,18 @@ s32 gevrJnAllyThink(ChrRecord *ally)
     return 0; /* let gevrAllyThink run normal follow/target pathing too */
 }
 
-static ChrRecord *jnFindForceTarget(const float origin[3], const float dir[3], float maxRangeCm, float minDot)
+static ChrRecord *lnFindForceTarget(const float origin[3], const float dir[3], float maxRangeCm, float minDot)
 {
     float pOrigin[3];
     StandTile *pStan = NULL;
-    jnGetPlayerTileOrigin(pOrigin, &pStan);
+    lnGetPlayerTileOrigin(pOrigin, &pStan);
 
     ChrRecord *best = NULL;
     float bestScore = 1e30f;
     const s32 n = get_numguards();
     for (s32 i = 0; i < n; i++) {
         ChrRecord *c = &g_ChrSlots[i];
-        if (!jnIsEnemyGuard(c)) continue;
+        if (!lnIsEnemyGuard(c)) continue;
         const float tgt[3] = { c->prop->pos.x, c->prop->pos.y + 100.0f, c->prop->pos.z };
         const float dx = tgt[0] - origin[0];
         const float dy = tgt[1] - origin[1];
@@ -1148,23 +1148,23 @@ static ChrRecord *jnFindForceTarget(const float origin[3], const float dir[3], f
         const float d = sqrtf(d2);
         const float dot = (dx * dir[0] + dy * dir[1] + dz * dir[2]) / d;
         if (dot < minDot) continue;
-        if (!jnHasLos(origin, pStan, pOrigin, tgt)) continue;
+        if (!lnHasLos(origin, pStan, pOrigin, tgt)) continue;
         const float score = d * (1.4f - dot);
         if (score < bestScore) { bestScore = score; best = c; }
     }
     return best;
 }
 
-static void jnTriggerForcePush(const float origin[3], const float dir[3])
+static void lnTriggerForcePush(const float origin[3], const float dir[3])
 {
     float pOrigin[3];
     StandTile *pStan = NULL;
-    jnGetPlayerTileOrigin(pOrigin, &pStan);
+    lnGetPlayerTileOrigin(pOrigin, &pStan);
 
     const s32 n = get_numguards();
     for (s32 i = 0; i < n; i++) {
         ChrRecord *c = &g_ChrSlots[i];
-        if (!jnIsEnemyGuard(c)) continue;
+        if (!lnIsEnemyGuard(c)) continue;
         const float tgt[3] = { c->prop->pos.x, c->prop->pos.y + 90.0f, c->prop->pos.z };
         const float dx = tgt[0] - origin[0];
         const float dy = tgt[1] - origin[1];
@@ -1173,11 +1173,11 @@ static void jnTriggerForcePush(const float origin[3], const float dir[3])
         if (d2 > 650.0f * 650.0f || d2 < 1.0f) continue;
         const float d = sqrtf(d2);
         const float to[3] = { dx / d, dy / d, dz / d };
-        if (jnDot3(dir, to) < 0.55f) continue;
-        if (!jnHasLos(origin, pStan, pOrigin, tgt)) continue;
-        jnHitGuardWithBlade(c, to, 1.2f, 0, 0);
+        if (lnDot3(dir, to) < 0.55f) continue;
+        if (!lnHasLos(origin, pStan, pOrigin, tgt)) continue;
+        lnHitGuardWithBlade(c, to, 1.2f, 0, 0);
         const float spark[3] = { c->prop->pos.x, c->prop->pos.y + 105.0f, c->prop->pos.z };
-        jnAddSpark(spark, 0xA0D8FFE0u, 24.0f, 0.25f);
+        lnAddSpark(spark, 0xA0D8FFE0u, 24.0f, 0.25f);
     }
     for (int slot = 0; slot < 24; slot++) {
         float pos[3];
@@ -1187,14 +1187,14 @@ static void jnTriggerForcePush(const float origin[3], const float dir[3])
         if (d2 > 750.0f * 750.0f || d2 < 1.0f) continue;
         const float d = sqrtf(d2);
         const float to[3] = { dx / d, dy / d, dz / d };
-        if (jnDot3(dir, to) < 0.50f) continue;
-        if (!jnHasLos(origin, pStan, pOrigin, pos)) continue;
+        if (lnDot3(dir, to) < 0.50f) continue;
+        if (!lnHasLos(origin, pStan, pOrigin, pos)) continue;
         const float vel[3] = { dir[0] * 1350.0f, dir[1] * 1350.0f + 260.0f, dir[2] * 1350.0f };
         gevrRagdollThrowBody(slot, vel);
     }
-    if (VrJediForcePowers && VrJediCatchProjectiles && g_CurrentPlayer && g_CurrentPlayer->prop) {
+    if (VrLaserswordForcePowers && VrLaserswordCatchProjectiles && g_CurrentPlayer && g_CurrentPlayer->prop) {
         for (int i = 0; i < PROJECTILES_ARR_MAX; i++) {
-            if (!jnProjValidAirborne(i)) continue;
+            if (!lnProjValidAirborne(i)) continue;
             Projectile *pr = &g_Projectiles[i];
             const float dx = pr->obj->prop->pos.x - origin[0];
             const float dy = pr->obj->prop->pos.y - origin[1];
@@ -1204,8 +1204,8 @@ static void jnTriggerForcePush(const float origin[3], const float dir[3])
                 if (d2 > 750.0f * 750.0f || d2 < 1.0f) continue;
                 const float d = sqrtf(d2);
                 const float to[3] = { dx / d, dy / d, dz / d };
-                if (jnDot3(dir, to) < 0.55f) continue;
-                if (!jnHasLos(origin, pStan, pOrigin, pr->obj->prop->pos.f)) continue;
+                if (lnDot3(dir, to) < 0.55f) continue;
+                if (!lnHasLos(origin, pStan, pOrigin, pr->obj->prop->pos.f)) continue;
             }
             float spd = sqrtf(pr->speed.x * pr->speed.x + pr->speed.y * pr->speed.y + pr->speed.z * pr->speed.z);
             if (spd < 18.0f) spd = 22.0f;
@@ -1213,16 +1213,16 @@ static void jnTriggerForcePush(const float origin[3], const float dir[3])
             pr->speed.y = dir[1] * spd;
             pr->speed.z = dir[2] * spd;
             pr->ownerprop = g_CurrentPlayer->prop;
-            jnAddSpark(pr->obj->prop->pos.f, 0x88E0FFFFu, 26.0f, 0.25f);
+            lnAddSpark(pr->obj->prop->pos.f, 0x88E0FFFFu, 26.0f, 0.25f);
         }
         s_caughtProjIdx = -1;
     }
-    jnSfx(GEVR_JN_SFX_FORCE_PUSH, 1.15f);
-    jnHaptic(VrJediHand ? 1 : 0, 0.7f, 0.08f);
+    lnSfx(GEVR_LN_SFX_FORCE_PUSH, 1.15f);
+    lnHaptic(VrLaserswordHand ? 1 : 0, 0.7f, 0.08f);
 }
 
 /* Compute flat-screen animated world blade segment so trails advance once per tick cleanly */
-static void jnFlatBladeWorld(const float eye[3], const float right[3], const float up[3], const float fwd[3],
+static void lnFlatBladeWorld(const float eye[3], const float right[3], const float up[3], const float fwd[3],
                              float sideSign, float reachCm, float hiltW[3], float tipW[3])
 {
     float lx, ly, lz, dx, dy, dz;
@@ -1239,7 +1239,7 @@ static void jnFlatBladeWorld(const float eye[3], const float right[3], const flo
         dx = -0.22f * sideSign; dy = 0.72f; dz = -0.66f;
     }
     float localDir[3] = { dx, dy, dz };
-    jnNorm3(localDir, localDir);
+    lnNorm3(localDir, localDir);
     float worldDir[3];
     for (int k = 0; k < 3; k++) {
         hiltW[k] = eye[k] + right[k] * lx + up[k] * ly - fwd[k] * lz;
@@ -1252,22 +1252,22 @@ static void jnFlatBladeWorld(const float eye[3], const float right[3], const flo
 /* Per-Tick Simulation                                                        */
 /* -------------------------------------------------------------------------- */
 
-void gevrJnGameTick(s32 ticks60)
+void gevrLnGameTick(s32 ticks60)
 {
     if (g_StageNum != s_lastStage) {
-        gevrJnGameReset();
+        gevrLnGameReset();
     }
     if (ticks60 <= 0) return;
     float dt = (float)ticks60 / 60.0f;
     if (dt > 0.1f) dt = 0.1f;
     s_time += dt;
-    jnTrailStepAge(dt);
+    lnTrailStepAge(dt);
     if (s_wallSparkCd > 0.0f) s_wallSparkCd -= dt;
     if (s_shadowDashCd > 0.0f) s_shadowDashCd -= dt;
     if (s_vrWhooshCd[0] > 0.0f) s_vrWhooshCd[0] -= dt;
     if (s_vrWhooshCd[1] > 0.0f) s_vrWhooshCd[1] -= dt;
     for (int h = 0; h < 2; h++) {
-        for (int i = 0; i < JN_VR_HIT_SLOTS; i++) {
+        for (int i = 0; i < LN_VR_HIT_SLOTS; i++) {
             if (s_vrHitCd[h][i] > 0.0f) s_vrHitCd[h][i] -= dt;
         }
     }
@@ -1275,12 +1275,12 @@ void gevrJnGameTick(s32 ticks60)
         s_shadowDashTimer -= dt;
         if (s_shadowDashTimer <= 0.0f) {
             s_shadowDashTimer = 0.0f;
-            jnRestoreShadowSpeed();
+            lnRestoreShadowSpeed();
         }
     }
 
     /* Pending cuts after ragdoll capture */
-    for (int i = 0; i < JN_MAX_CUTS; i++) {
+    for (int i = 0; i < LN_MAX_CUTS; i++) {
         if (!s_cuts[i].used) continue;
         if (gevrRagdollForceCutNear(s_cuts[i].pos, 120.0f, s_cuts[i].vel, s_cuts[i].cutsLeft) > 0) {
             s_cuts[i].used = 0;
@@ -1290,19 +1290,19 @@ void gevrJnGameTick(s32 ticks60)
         }
     }
 
-    for (int i = 0; i < JN_MAX_SPARKS; i++) {
+    for (int i = 0; i < LN_MAX_SPARKS; i++) {
         if (s_sparks[i].used) {
             s_sparks[i].age += dt;
             if (s_sparks[i].age >= s_sparks[i].maxAge) s_sparks[i].used = 0;
         }
     }
-    for (int i = 0; i < JN_MAX_TRACERS; i++) {
+    for (int i = 0; i < LN_MAX_TRACERS; i++) {
         if (s_tracers[i].used) {
             s_tracers[i].age += dt;
             if (s_tracers[i].age >= s_tracers[i].maxAge) s_tracers[i].used = 0;
         }
     }
-    for (int i = 0; i < JN_MAX_SMOKE; i++) {
+    for (int i = 0; i < LN_MAX_SMOKE; i++) {
         if (s_smoke[i].used) {
             s_smoke[i].pos[0] += s_smoke[i].vel[0] * dt;
             s_smoke[i].pos[1] += s_smoke[i].vel[1] * dt;
@@ -1313,68 +1313,68 @@ void gevrJnGameTick(s32 ticks60)
             if (s_smoke[i].age >= s_smoke[i].maxAge) s_smoke[i].used = 0;
         }
     }
-    if (s_sithLightningShow > 0.0f) s_sithLightningShow -= dt;
+    if (s_rivalLightningShow > 0.0f) s_rivalLightningShow -= dt;
 
-    if (!jnInGameplay()) {
+    if (!lnInGameplay()) {
         s_blocking = 0;
         s_blockHoldSec = 0.0f;
         s_ninjaShieldHeld = 0;
         s_lightningActive = 0;
-        s_saberLockTimer = 0.0f;
+        s_bladeLockTimer = 0.0f;
         s_caughtProjIdx = -1;
         s_vrBladeValid = s_vrOffBladeValid = s_vrForceValid = 0;
         s_prevTipValid[0] = s_prevTipValid[1] = 0;
-        jnRestoreShadowSpeed();
-        gevrJnAudioSetState(0, 0, 0.0f, 0.0f, 0, 0, 0, 0);
+        lnRestoreShadowSpeed();
+        gevrLnAudioSetState(0, 0, 0.0f, 0.0f, 0, 0, 0, 0);
         return;
     }
 
     /* Spawn & update special NPCs even in normal mode if enabled */
-    jnSpawnSpecialNpcs();
+    lnSpawnSpecialNpcs();
     float eye[3], right[3], up[3], fwd[3];
-    jnGetPlayerCameraWorld(eye, right, up, fwd);
-    jnTickSpecialNpcs(eye, dt);
-    if (VrAllyJedi) {
+    lnGetPlayerCameraWorld(eye, right, up, fwd);
+    lnTickSpecialNpcs(eye, dt);
+    if (VrAllyLasersword) {
         const s32 n = get_numguards();
         for (s32 i = 0; i < n; i++) {
             ChrRecord *c = &g_ChrSlots[i];
-            if (jnChrAliveValid(c, -1) && gevrAllyIs(c)) {
-                gevrJnAllyThink(c);
+            if (lnChrAliveValid(c, -1) && gevrAllyIs(c)) {
+                gevrLnAllyThink(c);
             }
         }
     }
 
-    if (!gevrJnBlastersActive()) {
-        s_blasterGranted = 0;
-    } else if (!s_blasterGranted) {
+    if (!gevrLnLasersActive()) {
+        s_laserGranted = 0;
+    } else if (!s_laserGranted) {
         bondinvAddInvItem(ITEM_LASER);
         currentPlayerEquipWeaponWrapper(GUNRIGHT, ITEM_LASER);
         currentPlayerEquipWeaponWrapper(GUNLEFT, ITEM_UNARMED);
-        s_blasterGranted = 1;
+        s_laserGranted = 1;
     }
 
-    if (!jnModeActive() || jnUsingGunsOverride()) {
+    if (!lnModeActive() || lnUsingGunsOverride()) {
         s_blocking = 0;
         s_blockHoldSec = 0.0f;
         s_ninjaShieldHeld = 0;
         s_lightningActive = 0;
-        s_saberLockTimer = 0.0f;
+        s_bladeLockTimer = 0.0f;
         s_caughtProjIdx = -1;
         s_vrBladeValid = s_vrOffBladeValid = s_vrForceValid = 0;
         s_prevTipValid[0] = s_prevTipValid[1] = 0;
-        jnRestoreShadowSpeed();
-        gevrJnAudioSetState(0, 0, 0.0f, 0.0f, 0, 0, 0, 0);
+        lnRestoreShadowSpeed();
+        gevrLnAudioSetState(0, 0, 0.0f, 0.0f, 0, 0, 0, 0);
         return;
     }
 
     /* Determine RT / LT actions & world-space tracked VR poses */
-    const int bCtrl = VrJediHand ? 0 : 1;
+    const int bCtrl = VrLaserswordHand ? 0 : 1;
     const int fCtrl = 1 - bCtrl;
-    const int sword = jnEffectiveNinjaSword();
-    const int dbl = (VrJediNinjaMode == GEVR_JN_JEDI && VrSaberStyle == GEVR_JN_STYLE_DOUBLE);
-    const int dualOffhand = gevrJnIsDualSword(VrJediNinjaMode, sword)
-        || (VrJediNinjaMode == GEVR_JN_JEDI && VrSaberStyle == GEVR_JN_STYLE_DUAL);
-    const float reachCm = (VrJediNinjaMode == GEVR_JN_JEDI) ? 115.0f : gevrJnWeaponReachCm(GEVR_JN_NINJA, sword);
+    const int sword = lnEffectiveNinjaSword();
+    const int dbl = (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && VrLaserswordStyle == GEVR_LN_STYLE_DOUBLE);
+    const int dualOffhand = gevrLnIsDualSword(VrLaserswordNinjaMode, sword)
+        || (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && VrLaserswordStyle == GEVR_LN_STYLE_DUAL);
+    const float reachCm = (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD) ? 115.0f : gevrLnWeaponReachCm(GEVR_LN_NINJA, sword);
 
     int bladeTap = 0, bladeBlock = 0, bladeThrow = 0;
     int offHold = 0, offRelease = 0, offDouble = 0;
@@ -1388,8 +1388,8 @@ void gevrJnGameTick(s32 ticks60)
     memcpy(forceDirW, fwd, sizeof(forceDirW));
     memcpy(bladeAimW, fwd, sizeof(bladeAimW));
     for (int k = 0; k < 3; k++) {
-        bladeHandW[k] += right[k] * (VrJediHand ? -18.0f : 18.0f) - up[k] * 12.0f + fwd[k] * 32.0f;
-        forceHandW[k] += right[k] * (VrJediHand ? 18.0f : -18.0f) - up[k] * 12.0f + fwd[k] * 32.0f;
+        bladeHandW[k] += right[k] * (VrLaserswordHand ? -18.0f : 18.0f) - up[k] * 12.0f + fwd[k] * 32.0f;
+        forceHandW[k] += right[k] * (VrLaserswordHand ? 18.0f : -18.0f) - up[k] * 12.0f + fwd[k] * 32.0f;
     }
 
     s_vrBladeValid = 0;
@@ -1403,19 +1403,19 @@ void gevrJnGameTick(s32 ticks60)
         if (s_vrThrowGuard > 0.0f) s_vrThrowGuard -= dt;
 
         bladeBlock = bDown;
-        gevrJnGetHandVelocityWorld(bCtrl, bVelCm);
-        gevrJnGetHandVelocityWorld(fCtrl, fVelCm);
+        gevrLnGetHandVelocityWorld(bCtrl, bVelCm);
+        gevrLnGetHandVelocityWorld(fCtrl, fVelCm);
 
         float br[3], bu[3], bf[3], fr[3], fu[3], ff[3];
-        if (gevrJnGetHandPoseWorld(bCtrl, s_vrBladeHiltW, br, bu, bf)) {
+        if (gevrLnGetHandPoseWorld(bCtrl, s_vrBladeHiltW, br, bu, bf)) {
             const float bd[3] = {
                 bf[0] * 0.35f + bu[0] * 0.94f,
                 bf[1] * 0.35f + bu[1] * 0.94f,
                 bf[2] * 0.35f + bu[2] * 0.94f
             };
-            jnNorm3(bd, s_vrBladeDirW);
-            jnNorm3(bf, s_vrBladeAimW);
-            const float activeLen = (VrJediNinjaMode == GEVR_JN_JEDI) ? (91.0f * s_fpIgnite.extend + 24.0f) : reachCm;
+            lnNorm3(bd, s_vrBladeDirW);
+            lnNorm3(bf, s_vrBladeAimW);
+            const float activeLen = (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD) ? (91.0f * s_fpIgnite.extend + 24.0f) : reachCm;
             for (int k = 0; k < 3; k++) {
                 s_vrBladeTipW[k] = s_vrBladeHiltW[k] + s_vrBladeDirW[k] * activeLen;
                 s_vrBladeBackW[k] = s_vrBladeHiltW[k] - s_vrBladeDirW[k] * (activeLen * 0.92f);
@@ -1425,8 +1425,8 @@ void gevrJnGameTick(s32 ticks60)
             memcpy(bladeAimW, s_vrBladeAimW, sizeof(bladeAimW));
         }
 
-        if (gevrJnGetHandPoseWorld(fCtrl, s_vrForcePosW, fr, fu, ff)) {
-            jnNorm3(ff, s_vrForceAimW);
+        if (gevrLnGetHandPoseWorld(fCtrl, s_vrForcePosW, fr, fu, ff)) {
+            lnNorm3(ff, s_vrForceAimW);
             s_vrForceValid = 1;
             memcpy(forceHandW, s_vrForcePosW, sizeof(forceHandW));
             memcpy(forceDirW, s_vrForceAimW, sizeof(forceDirW));
@@ -1438,8 +1438,8 @@ void gevrJnGameTick(s32 ticks60)
                     ff[2] * 0.35f + fu[2] * 0.94f
                 };
                 memcpy(s_vrOffHiltW, s_vrForcePosW, sizeof(s_vrOffHiltW));
-                jnNorm3(od, s_vrOffDirW);
-                const float oLen = (VrJediNinjaMode == GEVR_JN_JEDI) ? (81.0f * s_fpIgnite.extend + 24.0f) : 70.0f;
+                lnNorm3(od, s_vrOffDirW);
+                const float oLen = (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD) ? (81.0f * s_fpIgnite.extend + 24.0f) : 70.0f;
                 for (int k = 0; k < 3; k++) {
                     s_vrOffTipW[k] = s_vrOffHiltW[k] + s_vrOffDirW[k] * oLen;
                 }
@@ -1447,28 +1447,28 @@ void gevrJnGameTick(s32 ticks60)
             }
         }
 
-        if (!bDown && s_vrTrigWas[bCtrl] && gevrJnVrWristThrow(bVelCm, bladeAimW, 1)) {
+        if (!bDown && s_vrTrigWas[bCtrl] && gevrLnVrWristThrow(bVelCm, bladeAimW, 1)) {
             bladeThrow = 1;
         }
-        const float bSpeed = sqrtf(jnDot3(bVelCm, bVelCm));
-        const float fSpeed = sqrtf(jnDot3(fVelCm, fVelCm));
+        const float bSpeed = sqrtf(lnDot3(bVelCm, bVelCm));
+        const float fSpeed = sqrtf(lnDot3(fVelCm, fVelCm));
         vrSwing01 = fminf(1.0f, fmaxf(bSpeed, fSpeed) / 220.0f);
 
         /* Real tracked VR blade collision */
         const int allowPrimaryBladeHit = s_vrBladeValid && !bDown && !s_thrown.active
-            && !(VrJediNinjaMode == GEVR_JN_NINJA && gevrJnSelectedNinjaSlot == GEVR_JN_NINJA_SLOT_SHADOW)
-            && !(VrJediNinjaMode == GEVR_JN_NINJA && gevrJnSelectedNinjaSlot == GEVR_JN_NINJA_SLOT_BOOMERANG);
+            && !(VrLaserswordNinjaMode == GEVR_LN_NINJA && gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_SHADOW)
+            && !(VrLaserswordNinjaMode == GEVR_LN_NINJA && gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_BOOMERANG);
         if (allowPrimaryBladeHit && bSpeed >= 105.0f) {
             float vDir[3];
-            jnNorm3(bVelCm, vDir);
+            lnNorm3(bVelCm, vDir);
             if (s_vrWhooshCd[0] <= 0.0f && bSpeed >= 145.0f) {
-                jnSfx(VrJediNinjaMode == GEVR_JN_JEDI ? GEVR_JN_SFX_SLASH_SABER : GEVR_JN_SFX_SLASH_STEEL, fminf(1.3f, bSpeed / 180.0f));
+                lnSfx(VrLaserswordNinjaMode == GEVR_LN_LASERSWORD ? GEVR_LN_SFX_SLASH_LASERSWORD : GEVR_LN_SFX_SLASH_STEEL, fminf(1.3f, bSpeed / 180.0f));
                 s_vrWhooshCd[0] = 0.24f;
             }
-            jnVrSweepBladeAgainstGuards(0, s_vrBladeHiltW, s_vrBladeTipW, s_vrBladeBackW, dbl,
+            lnVrSweepBladeAgainstGuards(0, s_vrBladeHiltW, s_vrBladeTipW, s_vrBladeBackW, dbl,
                                         s_prevTipW[0], s_prevTipValid[0], vDir, 14.0f, bCtrl);
-        } else if (VrJediNinjaMode == GEVR_JN_NINJA
-                   && (gevrJnSelectedNinjaSlot == GEVR_JN_NINJA_SLOT_BOOMERANG || gevrJnSelectedNinjaSlot == GEVR_JN_NINJA_SLOT_SHADOW)
+        } else if (VrLaserswordNinjaMode == GEVR_LN_NINJA
+                   && (gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_BOOMERANG || gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_SHADOW)
                    && !bDown && bSpeed >= 150.0f && s_vrWhooshCd[0] <= 0.0f) {
             bladeTap = 1;
             s_vrWhooshCd[0] = 0.30f;
@@ -1482,12 +1482,12 @@ void gevrJnGameTick(s32 ticks60)
 
         if (dualOffhand && s_vrOffBladeValid && !fDown && fSpeed >= 105.0f) {
             float vDir[3];
-            jnNorm3(fVelCm, vDir);
+            lnNorm3(fVelCm, vDir);
             if (s_vrWhooshCd[1] <= 0.0f && fSpeed >= 145.0f) {
-                jnSfx(VrJediNinjaMode == GEVR_JN_JEDI ? GEVR_JN_SFX_SLASH_SABER : GEVR_JN_SFX_SLASH_STEEL, fminf(1.2f, fSpeed / 180.0f));
+                lnSfx(VrLaserswordNinjaMode == GEVR_LN_LASERSWORD ? GEVR_LN_SFX_SLASH_LASERSWORD : GEVR_LN_SFX_SLASH_STEEL, fminf(1.2f, fSpeed / 180.0f));
                 s_vrWhooshCd[1] = 0.24f;
             }
-            jnVrSweepBladeAgainstGuards(1, s_vrOffHiltW, s_vrOffTipW, NULL, 0,
+            lnVrSweepBladeAgainstGuards(1, s_vrOffHiltW, s_vrOffTipW, NULL, 0,
                                         s_prevTipW[1], s_prevTipValid[1], vDir, 12.0f, fCtrl);
         }
         if (s_vrOffBladeValid) {
@@ -1500,104 +1500,104 @@ void gevrJnGameTick(s32 ticks60)
         offHold = fDown;
         if (!fDown && s_vrTrigWas[fCtrl]) {
             offRelease = 1;
-            if (gevrJnVrWristThrow(fVelCm, forceDirW, 1)) offDouble = 1;
+            if (gevrLnVrWristThrow(fVelCm, forceDirW, 1)) offDouble = 1;
         }
-        if (fDown && s_vrPowerCd <= 0.0f && gevrJnVrWristPull(fVelCm, forceDirW, 1)) {
+        if (fDown && s_vrPowerCd <= 0.0f && gevrLnVrWristPull(fVelCm, forceDirW, 1)) {
             s_vrPowerCd = 0.25f;
         }
         s_vrTrigWas[bCtrl] = bDown;
         s_vrTrigWas[fCtrl] = fDown;
     } else {
         int rtDown = 0, ltDown = 0, isMouse = 0;
-        gevrJnInputReadFlat(&rtDown, &ltDown, &isMouse);
+        gevrLnInputReadFlat(&rtDown, &ltDown, &isMouse);
         (void)isMouse;
-        const int rtEv = gevrJnTriggerUpdate(&s_rtTrig, rtDown, dt);
-        const int ltEv = gevrJnTriggerUpdate(&s_ltTrig, ltDown, dt);
+        const int rtEv = gevrLnTriggerUpdate(&s_rtTrig, rtDown, dt);
+        const int ltEv = gevrLnTriggerUpdate(&s_ltTrig, ltDown, dt);
 
-        if (rtEv == GEVR_JN_TRIG_TAP) bladeTap = 1;
-        if (rtEv == GEVR_JN_TRIG_DOUBLE_TAP) bladeThrow = 1;
-        if (rtEv == GEVR_JN_TRIG_HOLD_START || rtEv == GEVR_JN_TRIG_HOLD_ACTIVE) bladeBlock = 1;
+        if (rtEv == GEVR_LN_TRIG_TAP) bladeTap = 1;
+        if (rtEv == GEVR_LN_TRIG_DOUBLE_TAP) bladeThrow = 1;
+        if (rtEv == GEVR_LN_TRIG_HOLD_START || rtEv == GEVR_LN_TRIG_HOLD_ACTIVE) bladeBlock = 1;
 
-        if (ltEv == GEVR_JN_TRIG_HOLD_START || ltEv == GEVR_JN_TRIG_HOLD_ACTIVE) offHold = 1;
-        if (ltEv == GEVR_JN_TRIG_HOLD_RELEASE) offRelease = 1;
-        if (ltEv == GEVR_JN_TRIG_DOUBLE_TAP) offDouble = 1;
+        if (ltEv == GEVR_LN_TRIG_HOLD_START || ltEv == GEVR_LN_TRIG_HOLD_ACTIVE) offHold = 1;
+        if (ltEv == GEVR_LN_TRIG_HOLD_RELEASE) offRelease = 1;
+        if (ltEv == GEVR_LN_TRIG_DOUBLE_TAP) offDouble = 1;
     }
 
     s_blocking = bladeBlock && !s_thrown.active;
-    s_ninjaShieldHeld = jnHasNinjaShield() && offHold;
+    s_ninjaShieldHeld = lnHasNinjaShield() && offHold;
     if (s_blocking || s_ninjaShieldHeld) s_blockHoldSec += dt;
     else s_blockHoldSec = 0.0f;
 
     /* Ignition animation + snap-hiss SFX */
-    if (VrJediNinjaMode == GEVR_JN_JEDI) {
+    if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD) {
         const float prevExt = s_fpIgnite.extend;
-        gevrJnIgnitionUpdate(&s_fpIgnite, !s_thrown.active, 1, dt);
+        gevrLnIgnitionUpdate(&s_fpIgnite, !s_thrown.active, 1, dt);
         if (prevExt <= 0.01f && s_fpIgnite.extend > 0.01f) {
-            jnSfx(GEVR_JN_SFX_IGNITE, 1.0f);
+            lnSfx(GEVR_LN_SFX_IGNITE, 1.0f);
         }
     }
 
-    /* Sith Saber Lock clash resolution */
-    if (s_saberLockTimer > 0.0f) {
-        if (!jnChrAliveValid(s_saberLockChr, s_saberLockChrnum)) {
-            s_saberLockTimer = 0.0f;
-            s_saberLockChr = NULL;
+    /* Enemy Blade Lock clash resolution */
+    if (s_bladeLockTimer > 0.0f) {
+        if (!lnChrAliveValid(s_bladeLockChr, s_bladeLockChrnum)) {
+            s_bladeLockTimer = 0.0f;
+            s_bladeLockChr = NULL;
         } else {
-            s_saberLockTimer -= dt;
-            s_saberLockPulse -= dt;
-            if (s_saberLockPulse <= 0.0f) {
-                s_saberLockPulse = 0.14f;
+            s_bladeLockTimer -= dt;
+            s_bladeLockPulse -= dt;
+            if (s_bladeLockPulse <= 0.0f) {
+                s_bladeLockPulse = 0.14f;
                 const float clashPt[3] = {
-                    (eye[0] + s_saberLockChr->prop->pos.x) * 0.5f,
-                    s_saberLockChr->prop->pos.y + 115.0f,
-                    (eye[2] + s_saberLockChr->prop->pos.z) * 0.5f
+                    (eye[0] + s_bladeLockChr->prop->pos.x) * 0.5f,
+                    s_bladeLockChr->prop->pos.y + 115.0f,
+                    (eye[2] + s_bladeLockChr->prop->pos.z) * 0.5f
                 };
-                jnAddSpark(clashPt, 0xFFF480FFu, 26.0f, 0.18f);
-                jnHaptic(bCtrl, 0.65f, 0.04f);
+                lnAddSpark(clashPt, 0xFFF480FFu, 26.0f, 0.18f);
+                lnHaptic(bCtrl, 0.65f, 0.04f);
             }
-            const float pushIn = g_gevrStereo ? jnDot3(bVelCm, bladeAimW) : 0.0f;
+            const float pushIn = g_gevrStereo ? lnDot3(bVelCm, bladeAimW) : 0.0f;
             if (bladeTap || pushIn > 150.0f) {
-                float dir[3] = { s_saberLockChr->prop->pos.x - eye[0], 0.0f, s_saberLockChr->prop->pos.z - eye[2] };
-                jnNorm3(dir, dir);
-                jnHitGuardWithBlade(s_saberLockChr, dir, 18.0f, 0, 1);
-                JnSpecialNpc *sp = jnFindSpecial(s_saberLockChr);
+                float dir[3] = { s_bladeLockChr->prop->pos.x - eye[0], 0.0f, s_bladeLockChr->prop->pos.z - eye[2] };
+                lnNorm3(dir, dir);
+                lnHitGuardWithBlade(s_bladeLockChr, dir, 18.0f, 0, 1);
+                LnSpecialNpc *sp = lnFindSpecial(s_bladeLockChr);
                 if (sp) sp->meleeCd = 1.6f;
-                jnSfx(GEVR_JN_SFX_CLASH_SABER, 1.5f);
-                jnHaptic(bCtrl, 1.0f, 0.12f);
-                s_saberLockTimer = 0.0f;
-                s_saberLockChr = NULL;
+                lnSfx(GEVR_LN_SFX_CLASH_LASERSWORD, 1.5f);
+                lnHaptic(bCtrl, 1.0f, 0.12f);
+                s_bladeLockTimer = 0.0f;
+                s_bladeLockChr = NULL;
             }
         }
     }
 
     /* Shadow-Step mobility activation in Ninja mode */
-    if (VrJediNinjaMode == GEVR_JN_NINJA && VrNinjaShadowStep) {
-        const int shadowSlot = (gevrJnSelectedNinjaSlot == GEVR_JN_NINJA_SLOT_SHADOW);
+    if (VrLaserswordNinjaMode == GEVR_LN_NINJA && VrNinjaShadowStep) {
+        const int shadowSlot = (gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_SHADOW);
         if ((shadowSlot && (bladeTap || offDouble))
             || (offDouble && !s_chokeActive && s_grabBodySlot < 0)) {
-            jnActivateShadowStep(eye, fwd);
+            lnActivateShadowStep(eye, fwd);
         }
     }
 
     /* Flat-screen melee sweep (VR uses real tracked blade collision above) */
     if (!g_gevrStereo && bladeTap && !s_blocking && !s_thrown.active
-        && !(VrJediNinjaMode == GEVR_JN_NINJA && gevrJnSelectedNinjaSlot == GEVR_JN_NINJA_SLOT_SHADOW)
-        && !(VrJediNinjaMode == GEVR_JN_NINJA && gevrJnSelectedNinjaSlot == GEVR_JN_NINJA_SLOT_BOOMERANG)) {
-        if (gevrJnSlashStart(&s_slash, s_blocking)) {
+        && !(VrLaserswordNinjaMode == GEVR_LN_NINJA && gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_SHADOW)
+        && !(VrLaserswordNinjaMode == GEVR_LN_NINJA && gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_BOOMERANG)) {
+        if (gevrLnSlashStart(&s_slash, s_blocking)) {
             const float reachMul = dbl ? 1.12f : 1.0f;
-            jnPerformMeleeSweep(eye, fwd, gevrJnWeaponReachCm(VrJediNinjaMode, sword) * reachMul, 14.0f);
-            jnSfx(VrJediNinjaMode == GEVR_JN_JEDI ? GEVR_JN_SFX_SLASH_SABER : GEVR_JN_SFX_SLASH_STEEL, 1.0f);
-            if (VrJediNinjaMode == GEVR_JN_JEDI && VrSaberStyle == GEVR_JN_STYLE_DUAL && !s_offSlash.active) {
-                gevrJnSlashStart(&s_offSlash, 0);
+            lnPerformMeleeSweep(eye, fwd, gevrLnWeaponReachCm(VrLaserswordNinjaMode, sword) * reachMul, 14.0f);
+            lnSfx(VrLaserswordNinjaMode == GEVR_LN_LASERSWORD ? GEVR_LN_SFX_SLASH_LASERSWORD : GEVR_LN_SFX_SLASH_STEEL, 1.0f);
+            if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && VrLaserswordStyle == GEVR_LN_STYLE_DUAL && !s_offSlash.active) {
+                gevrLnSlashStart(&s_offSlash, 0);
             }
         }
     }
-    gevrJnSlashStep(&s_slash, dt);
-    gevrJnSlashStep(&s_offSlash, dt);
+    gevrLnSlashStep(&s_slash, dt);
+    gevrLnSlashStep(&s_offSlash, dt);
 
     /* Sample world-space motion ribbons once per tick (fixes stereo per-eye trail corruption) */
-    if (VrJnBladeTrails && !s_thrown.active) {
-        if (VrJediNinjaMode == GEVR_JN_JEDI && s_fpIgnite.extend > 0.25f) {
+    if (VrLnBladeTrails && !s_thrown.active) {
+        if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && s_fpIgnite.extend > 0.25f) {
             if (g_gevrStereo && s_vrBladeValid) {
                 const float emitOff = dbl ? 16.0f : 24.0f;
                 const float emitW[3] = {
@@ -1605,41 +1605,41 @@ void gevrJnGameTick(s32 ticks60)
                     s_vrBladeHiltW[1] + s_vrBladeDirW[1] * emitOff,
                     s_vrBladeHiltW[2] + s_vrBladeDirW[2] * emitOff
                 };
-                jnTrailPushWorld(0, emitW, s_vrBladeTipW);
+                lnTrailPushWorld(0, emitW, s_vrBladeTipW);
                 if (dbl) {
                     const float emitB[3] = {
                         s_vrBladeHiltW[0] - s_vrBladeDirW[0] * 16.0f,
                         s_vrBladeHiltW[1] - s_vrBladeDirW[1] * 16.0f,
                         s_vrBladeHiltW[2] - s_vrBladeDirW[2] * 16.0f
                     };
-                    jnTrailPushWorld(1, emitB, s_vrBladeBackW);
+                    lnTrailPushWorld(1, emitB, s_vrBladeBackW);
                 }
             } else {
-                const float sideSign = VrJediHand ? -1.0f : 1.0f;
+                const float sideSign = VrLaserswordHand ? -1.0f : 1.0f;
                 float hw[3], tw[3];
-                jnFlatBladeWorld(eye, right, up, fwd, sideSign, 91.0f * s_fpIgnite.extend + 24.0f, hw, tw);
-                jnTrailPushWorld(0, hw, tw);
+                lnFlatBladeWorld(eye, right, up, fwd, sideSign, 91.0f * s_fpIgnite.extend + 24.0f, hw, tw);
+                lnTrailPushWorld(0, hw, tw);
             }
-            if (VrSaberStyle == GEVR_JN_STYLE_DUAL && g_gevrStereo && s_vrOffBladeValid) {
-                jnTrailPushWorld(2, s_vrOffHiltW, s_vrOffTipW);
+            if (VrLaserswordStyle == GEVR_LN_STYLE_DUAL && g_gevrStereo && s_vrOffBladeValid) {
+                lnTrailPushWorld(2, s_vrOffHiltW, s_vrOffTipW);
             }
-        } else if (VrJediNinjaMode == GEVR_JN_NINJA && gevrJnSelectedNinjaSlot != GEVR_JN_NINJA_SLOT_BOOMERANG) {
+        } else if (VrLaserswordNinjaMode == GEVR_LN_NINJA && gevrLnSelectedNinjaSlot != GEVR_LN_NINJA_SLOT_BOOMERANG) {
             if (g_gevrStereo && s_vrBladeValid) {
-                jnTrailPushWorld(0, s_vrBladeHiltW, s_vrBladeTipW);
+                lnTrailPushWorld(0, s_vrBladeHiltW, s_vrBladeTipW);
             } else {
-                const float sideSign = VrJediHand ? -1.0f : 1.0f;
+                const float sideSign = VrLaserswordHand ? -1.0f : 1.0f;
                 float hw[3], tw[3];
-                jnFlatBladeWorld(eye, right, up, fwd, sideSign, reachCm, hw, tw);
-                jnTrailPushWorld(0, hw, tw);
+                lnFlatBladeWorld(eye, right, up, fwd, sideSign, reachCm, hw, tw);
+                lnTrailPushWorld(0, hw, tw);
             }
-            if (gevrJnIsDualSword(GEVR_JN_NINJA, sword) && g_gevrStereo && s_vrOffBladeValid) {
-                jnTrailPushWorld(2, s_vrOffHiltW, s_vrOffTipW);
+            if (gevrLnIsDualSword(GEVR_LN_NINJA, sword) && g_gevrStereo && s_vrOffBladeValid) {
+                lnTrailPushWorld(2, s_vrOffHiltW, s_vrOffTipW);
             }
         }
     }
 
     /* Wall / floor plasma scorch sparks along actual tracked blade segment (or flat sweep) */
-    if (VrJediNinjaMode == GEVR_JN_JEDI && VrJnBladeTrails && !s_thrown.active
+    if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && VrLnBladeTrails && !s_thrown.active
         && s_fpIgnite.extend > 0.45f && pdphysIsReady()) {
         float hitPos[3];
         int hit = 0;
@@ -1654,7 +1654,7 @@ void gevrJnGameTick(s32 ticks60)
                 fwd[1] * 0.65f + up[1] * 0.72f,
                 fwd[2] * 0.65f + up[2] * 0.72f
             };
-            jnNorm3(wDir, wDir);
+            lnNorm3(wDir, wDir);
             const float tipW[3] = {
                 bladeHandW[0] + wDir[0] * 110.0f,
                 bladeHandW[1] + wDir[1] * 110.0f,
@@ -1663,23 +1663,23 @@ void gevrJnGameTick(s32 ticks60)
             hit = pdphysRaycastAnyRoom(bladeHandW, tipW, hitPos, NULL, NULL);
         }
         if (hit && s_wallSparkCd <= 0.0f) {
-            jnAddSpark(hitPos, 0xFF9838FFu, 15.0f, 0.14f);
-            jnHaptic(bCtrl, 0.25f, 0.02f);
+            lnAddSpark(hitPos, 0xFF9838FFu, 15.0f, 0.14f);
+            lnHaptic(bCtrl, 0.25f, 0.02f);
             s_wallSparkCd = 0.055f;
         }
     }
 
-    /* Throw Lightsaber / Ninja Boomerang */
-    const int wantThrow = bladeThrow || (VrJediNinjaMode == GEVR_JN_JEDI && gevrJnSelectedPower == GEVR_JN_FORCE_THROW && offDouble)
-        || (VrJediNinjaMode == GEVR_JN_NINJA && gevrJnSelectedNinjaSlot == GEVR_JN_NINJA_SLOT_BOOMERANG && bladeTap);
+    /* Throw Lasersword / Ninja Boomerang */
+    const int wantThrow = bladeThrow || (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && gevrLnSelectedPower == GEVR_LN_FORCE_THROW && offDouble)
+        || (VrLaserswordNinjaMode == GEVR_LN_NINJA && gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_BOOMERANG && bladeTap);
     if (wantThrow && !s_thrown.active && !s_blocking) {
-        const int isBoom = (VrJediNinjaMode == GEVR_JN_NINJA);
-        gevrJnThrownLaunch(&s_thrown, isBoom, bladeHandW, bladeAimW);
+        const int isBoom = (VrLaserswordNinjaMode == GEVR_LN_NINJA);
+        gevrLnThrownLaunch(&s_thrown, isBoom, bladeHandW, bladeAimW);
         s_thrownBounces = 0;
         s_throwHitCount = 0;
-        jnTrailClear();
-        jnSfx(isBoom ? GEVR_JN_SFX_SLASH_STEEL : GEVR_JN_SFX_SLASH_SABER, 1.2f);
-        jnHaptic(bCtrl, 0.7f, 0.08f);
+        lnTrailClear();
+        lnSfx(isBoom ? GEVR_LN_SFX_SLASH_STEEL : GEVR_LN_SFX_SLASH_LASERSWORD, 1.2f);
+        lnHaptic(bCtrl, 0.7f, 0.08f);
     }
 
     /* Update flying thrown blade / boomerang (+ corridor wall ricochets) */
@@ -1699,10 +1699,10 @@ void gevrJnGameTick(s32 ticks60)
             float hitPos[3], hitN[3];
             if (pdphysRaycastAnyRoom(prev, nxt, hitPos, hitN, NULL)) {
                 if (s_thrown.isBoomerang && VrNinjaRicochet && s_thrownBounces < 2
-                    && fabsf(jnDot3(s_thrown.dir, hitN)) < 0.72f) {
+                    && fabsf(lnDot3(s_thrown.dir, hitN)) < 0.72f) {
                     float refl[3];
-                    gevrJnReflectVec(s_thrown.dir, hitN, refl);
-                    jnNorm3(refl, s_thrown.dir);
+                    gevrLnReflectVec(s_thrown.dir, hitN, refl);
+                    lnNorm3(refl, s_thrown.dir);
                     s_thrown.vel[0] = s_thrown.dir[0] * s_thrown.speed;
                     s_thrown.vel[1] = s_thrown.dir[1] * s_thrown.speed;
                     s_thrown.vel[2] = s_thrown.dir[2] * s_thrown.speed;
@@ -1710,21 +1710,21 @@ void gevrJnGameTick(s32 ticks60)
                     s_thrown.pos[1] = hitPos[1] + hitN[1] * 8.0f;
                     s_thrown.pos[2] = hitPos[2] + hitN[2] * 8.0f;
                     s_thrownBounces++;
-                    jnAddSpark(hitPos, 0xFFE870FFu, 20.0f, 0.20f);
-                    jnSfx(GEVR_JN_SFX_CLASH_METAL, 0.95f);
+                    lnAddSpark(hitPos, 0xFFE870FFu, 20.0f, 0.20f);
+                    lnSfx(GEVR_LN_SFX_CLASH_METAL, 0.95f);
                 } else {
                     hitWall = 1;
-                    jnAddSpark(hitPos, s_thrown.isBoomerang ? 0xFFE870FFu : 0xFF9838FFu, 22.0f, 0.20f);
-                    jnSfx(s_thrown.isBoomerang ? GEVR_JN_SFX_CLASH_METAL : GEVR_JN_SFX_CLASH_SABER, 0.9f);
+                    lnAddSpark(hitPos, s_thrown.isBoomerang ? 0xFFE870FFu : 0xFF9838FFu, 22.0f, 0.20f);
+                    lnSfx(s_thrown.isBoomerang ? GEVR_LN_SFX_CLASH_METAL : GEVR_LN_SFX_CLASH_LASERSWORD, 0.9f);
                 }
             }
         }
-        gevrJnThrownStep(&s_thrown, bladeHandW, hitWall, dt);
+        gevrLnThrownStep(&s_thrown, bladeHandW, hitWall, dt);
 
         const s32 n = get_numguards();
         for (s32 i = 0; i < n; i++) {
             ChrRecord *c = &g_ChrSlots[i];
-            if (!jnIsEnemyGuard(c)) continue;
+            if (!lnIsEnemyGuard(c)) continue;
             const float dx = c->prop->pos.x - s_thrown.pos[0];
             const float dy = (c->prop->pos.y + 100.0f) - s_thrown.pos[1];
             const float dz = c->prop->pos.z - s_thrown.pos[2];
@@ -1742,15 +1742,15 @@ void gevrJnGameTick(s32 ticks60)
             if (cooldownIdx >= 0) s_throwHitCd[cooldownIdx] = 0.25f;
 
             float dir[3];
-            jnNorm3(s_thrown.vel, dir);
-            jnHitGuardWithBlade(c, dir, 18.0f, 2, 1);
+            lnNorm3(s_thrown.vel, dir);
+            lnHitGuardWithBlade(c, dir, 18.0f, 2, 1);
         }
     }
 
     /* Force Lightning vs Telekinesis (Force Grab/Choke, Pull, Push, Limb Ball) */
-    const int allowForce = (VrJediNinjaMode == GEVR_JN_JEDI && VrJediForcePowers != 0)
-        || (VrJediNinjaMode == GEVR_JN_NINJA && !jnHasNinjaShield());
-    const int useLightning = (VrJediNinjaMode == GEVR_JN_JEDI && gevrJnSelectedPower == GEVR_JN_FORCE_LIGHTNING);
+    const int allowForce = (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && VrLaserswordForcePowers != 0)
+        || (VrLaserswordNinjaMode == GEVR_LN_NINJA && !lnHasNinjaShield());
+    const int useLightning = (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && gevrLnSelectedPower == GEVR_LN_FORCE_LIGHTNING);
     const float *forceOrigin = (g_gevrStereo && s_vrForceValid) ? forceHandW : eye;
     const float *forceAim = (g_gevrStereo && s_vrForceValid) ? forceDirW : fwd;
 
@@ -1765,7 +1765,7 @@ void gevrJnGameTick(s32 ticks60)
     } else if (useLightning && offHold) {
         float pOrigin[3];
         StandTile *pStan = NULL;
-        jnGetPlayerTileOrigin(pOrigin, &pStan);
+        lnGetPlayerTileOrigin(pOrigin, &pStan);
 
         s_lightningActive = 1;
         s_lightningTickAccum += dt;
@@ -1773,9 +1773,9 @@ void gevrJnGameTick(s32 ticks60)
         if (doDmg) s_lightningTickAccum = 0.0f;
 
         const s32 n = get_numguards();
-        for (s32 i = 0; i < n && s_lightningCount < JN_MAX_LIGHTNING; i++) {
+        for (s32 i = 0; i < n && s_lightningCount < LN_MAX_LIGHTNING; i++) {
             ChrRecord *c = &g_ChrSlots[i];
-            if (!jnIsEnemyGuard(c)) continue;
+            if (!lnIsEnemyGuard(c)) continue;
             const float tgt[3] = { c->prop->pos.x, c->prop->pos.y + 100.0f, c->prop->pos.z };
             const float dx = tgt[0] - forceOrigin[0];
             const float dy = tgt[1] - forceOrigin[1];
@@ -1784,22 +1784,22 @@ void gevrJnGameTick(s32 ticks60)
             if (d2 > 900.0f * 900.0f || d2 < 1.0f) continue;
             const float d = sqrtf(d2);
             const float dir[3] = { dx / d, dy / d, dz / d };
-            if (jnDot3(forceAim, dir) < 0.65f) continue;
-            if (!jnHasLos(forceOrigin, pStan, pOrigin, tgt)) continue;
+            if (lnDot3(forceAim, dir) < 0.65f) continue;
+            if (!lnHasLos(forceOrigin, pStan, pOrigin, tgt)) continue;
             s_lightningChrs[s_lightningCount] = c;
             s_lightningChrnums[s_lightningCount] = c->chrnum;
             s_lightningCount++;
             if (doDmg) {
-                jnHitGuardWithBlade(c, dir, 0.55f, 0, 0);
+                lnHitGuardWithBlade(c, dir, 0.55f, 0, 0);
             }
         }
     } else if (allowForce) {
         float pOrigin[3];
         StandTile *pStan = NULL;
-        jnGetPlayerTileOrigin(pOrigin, &pStan);
+        lnGetPlayerTileOrigin(pOrigin, &pStan);
 
         float chokeTarget[3];
-        gevrJnChokeTargetPos(forceOrigin, forceAim, chokeTarget);
+        gevrLnChokeTargetPos(forceOrigin, forceAim, chokeTarget);
         float ballCenter[3] = {
             forceOrigin[0] + forceAim[0] * 105.0f,
             forceOrigin[1] + forceAim[1] * 105.0f - 8.0f,
@@ -1808,7 +1808,7 @@ void gevrJnGameTick(s32 ticks60)
 
         if (offHold) {
             if (s_chokeActive) {
-                if (!jnChrAliveValid(s_chokeChr, s_chokeChrnum)) {
+                if (!lnChrAliveValid(s_chokeChr, s_chokeChrnum)) {
                     s_chokeActive = 0;
                     s_chokeChr = NULL;
                 } else {
@@ -1821,23 +1821,23 @@ void gevrJnGameTick(s32 ticks60)
                         cur[1] + (footTarget[1] - cur[1]) * blend,
                         cur[2] + (footTarget[2] - cur[2]) * blend
                     };
-                    jnMoveChrProp(s_chokeChr, next);
+                    lnMoveChrProp(s_chokeChr, next);
                     s_chokeChr->actiontype = ACT_STAND;
                     chrSetFiring(s_chokeChr, GUNRIGHT, FALSE);
                     chrSetFiring(s_chokeChr, GUNLEFT, FALSE);
                     s_chokeChr->damage += dt * 1.4f;
 
                     /* VR Force Slam downward gesture while choking */
-                    if (g_gevrStereo && VrJediForcePowers && fVelCm[1] < -200.0f && s_chokeHoldSec > 0.15f) {
+                    if (g_gevrStereo && VrLaserswordForcePowers && fVelCm[1] < -200.0f && s_chokeHoldSec > 0.15f) {
                         const float slamDir[3] = { 0.0f, -1.0f, 0.0f };
                         const float slamVel[3] = { 0.0f, -900.0f, 0.0f };
                         memcpy(s_thrownBodyStart, s_chokeChr->prop->pos.f, sizeof(s_thrownBodyStart));
-                        jnHitGuardWithBlade(s_chokeChr, slamDir, 45.0f, 0, 0);
+                        lnHitGuardWithBlade(s_chokeChr, slamDir, 45.0f, 0, 0);
                         int bslot = gevrRagdollFindNearestBody(s_thrownBodyStart, slamDir, 260.0f, -1.0f, NULL);
                         if (bslot >= 0) gevrRagdollThrowBody(bslot, slamVel);
-                        jnAddSpark(s_thrownBodyStart, 0x88C0FFFFu, 32.0f, 0.25f);
-                        jnSfx(GEVR_JN_SFX_FORCE_PUSH, 1.35f);
-                        jnHaptic(fCtrl, 1.0f, 0.12f);
+                        lnAddSpark(s_thrownBodyStart, 0x88C0FFFFu, 32.0f, 0.25f);
+                        lnSfx(GEVR_LN_SFX_FORCE_PUSH, 1.35f);
+                        lnHaptic(fCtrl, 1.0f, 0.12f);
                         s_chokeActive = 0;
                         s_chokeChr = NULL;
                     }
@@ -1849,8 +1849,8 @@ void gevrJnGameTick(s32 ticks60)
                 } else {
                     s_grabBodySlot = -1;
                 }
-            } else if (VrJediNinjaMode == GEVR_JN_JEDI && VrJediCatchProjectiles && s_caughtProjIdx >= 0) {
-                if (jnProjValidAirborne(s_caughtProjIdx)) {
+            } else if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && VrLaserswordCatchProjectiles && s_caughtProjIdx >= 0) {
+                if (lnProjValidAirborne(s_caughtProjIdx)) {
                     Projectile *pr = &g_Projectiles[s_caughtProjIdx];
                     pr->speed.x = (forceOrigin[0] + forceAim[0] * 45.0f - pr->obj->prop->pos.x) * 0.14f;
                     pr->speed.y = (forceOrigin[1] + forceAim[1] * 45.0f - pr->obj->prop->pos.y) * 0.14f;
@@ -1860,11 +1860,11 @@ void gevrJnGameTick(s32 ticks60)
                 }
             } else {
                 int caughtProj = 0;
-                if (VrJediNinjaMode == GEVR_JN_JEDI && VrJediCatchProjectiles) {
+                if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && VrLaserswordCatchProjectiles) {
                     float bestD2 = 1100.0f * 1100.0f;
                     int bestIdx = -1;
                     for (int pi = 0; pi < PROJECTILES_ARR_MAX; pi++) {
-                        if (!jnProjValidAirborne(pi)) continue;
+                        if (!lnProjValidAirborne(pi)) continue;
                         Projectile *pr = &g_Projectiles[pi];
                         const float dx = pr->obj->prop->pos.x - forceOrigin[0];
                         const float dy = pr->obj->prop->pos.y - forceOrigin[1];
@@ -1873,17 +1873,17 @@ void gevrJnGameTick(s32 ticks60)
                         if (d2 >= bestD2 || d2 < 4.0f) continue;
                         const float d = sqrtf(d2);
                         if ((dx * forceAim[0] + dy * forceAim[1] + dz * forceAim[2]) / d < 0.72f) continue;
-                        if (!jnHasLos(forceOrigin, pStan, pOrigin, pr->obj->prop->pos.f)) continue;
+                        if (!lnHasLos(forceOrigin, pStan, pOrigin, pr->obj->prop->pos.f)) continue;
                         bestD2 = d2;
                         bestIdx = pi;
                     }
                     if (bestIdx >= 0) {
                         s_caughtProjIdx = bestIdx;
                         caughtProj = 1;
-                        jnHaptic(fCtrl, 0.5f, 0.05f);
+                        lnHaptic(fCtrl, 0.5f, 0.05f);
                     }
                 }
-                ChrRecord *closeNpc = caughtProj ? NULL : jnFindForceTarget(forceOrigin, forceAim, GEVR_JN_GRAB_RANGE_CM, 0.72f);
+                ChrRecord *closeNpc = caughtProj ? NULL : lnFindForceTarget(forceOrigin, forceAim, GEVR_LN_GRAB_RANGE_CM, 0.72f);
                 if (caughtProj) {
                     /* held by off-hand */
                 } else if (closeNpc) {
@@ -1891,29 +1891,29 @@ void gevrJnGameTick(s32 ticks60)
                     s_chokeChrnum = closeNpc->chrnum;
                     s_chokeActive = 1;
                     s_chokeHoldSec = 0.0f;
-                    jnHaptic(fCtrl, 0.5f, 0.06f);
+                    lnHaptic(fCtrl, 0.5f, 0.06f);
                 } else {
                     float bodyPos[3];
                     int bslot = gevrRagdollFindNearestBody(forceOrigin, forceAim, 900.0f, 0.75f, bodyPos);
-                    if (bslot >= 0 && jnHasLos(forceOrigin, pStan, pOrigin, bodyPos)) {
+                    if (bslot >= 0 && lnHasLos(forceOrigin, pStan, pOrigin, bodyPos)) {
                         s_grabBodySlot = bslot;
                         gevrRagdollPullBody(bslot, chokeTarget, 1600.0f, 7.5f);
-                    } else if (VrJediNinjaMode == GEVR_JN_JEDI) {
-                        int pulled = gevrRagdollPullLooseLimbs(forceOrigin, ballCenter, GEVR_JN_PULL_RANGE_CM, s_time, GEVR_JN_MAX_LIMBS);
+                    } else if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD) {
+                        int pulled = gevrRagdollPullLooseLimbs(forceOrigin, ballCenter, GEVR_LN_PULL_RANGE_CM, s_time, GEVR_LN_MAX_LIMBS);
                         if (pulled > 0) {
                             s_limbBallSuspended = 1;
                             memcpy(s_limbBallPos, ballCenter, sizeof(s_limbBallPos));
                         }
-                        ChrRecord *farNpc = jnFindForceTarget(forceOrigin, forceAim, GEVR_JN_PULL_RANGE_CM, 0.84f);
+                        ChrRecord *farNpc = lnFindForceTarget(forceOrigin, forceAim, GEVR_LN_PULL_RANGE_CM, 0.84f);
                         if (farNpc) {
                             float p[3] = { farNpc->prop->pos.x, farNpc->prop->pos.y, farNpc->prop->pos.z };
                             const float toHand[3] = { forceOrigin[0] - p[0], forceOrigin[1] - 100.0f - p[1], forceOrigin[2] - p[2] };
                             float nd[3];
-                            const float d = jnNorm3(toHand, nd);
+                            const float d = lnNorm3(toHand, nd);
                             if (d > 140.0f) {
                                 const float step = fminf(d - 110.0f, 680.0f * dt);
                                 float nxt[3] = { p[0] + nd[0] * step, p[1] + nd[1] * step, p[2] + nd[2] * step };
-                                jnMoveChrProp(farNpc, nxt);
+                                lnMoveChrProp(farNpc, nxt);
                             }
                         }
                     }
@@ -1922,30 +1922,30 @@ void gevrJnGameTick(s32 ticks60)
         }
 
         if (offRelease) {
-            if (s_chokeActive && jnChrAliveValid(s_chokeChr, s_chokeChrnum)) {
+            if (s_chokeActive && lnChrAliveValid(s_chokeChr, s_chokeChrnum)) {
                 float launchDir[3] = { forceAim[0], forceAim[1], forceAim[2] };
-                if (g_gevrStereo && sqrtf(jnDot3(fVelCm, fVelCm)) > 240.0f) {
-                    jnNorm3(fVelCm, launchDir);
+                if (g_gevrStereo && sqrtf(lnDot3(fVelCm, fVelCm)) > 240.0f) {
+                    lnNorm3(fVelCm, launchDir);
                 }
                 const float throwVel[3] = { launchDir[0] * 1600.0f, launchDir[1] * 1600.0f + 160.0f, launchDir[2] * 1600.0f };
                 memcpy(s_thrownBodyStart, s_chokeChr->prop->pos.f, sizeof(s_thrownBodyStart));
-                jnHitGuardWithBlade(s_chokeChr, launchDir, 40.0f, 0, 0);
+                lnHitGuardWithBlade(s_chokeChr, launchDir, 40.0f, 0, 0);
                 int bslot = gevrRagdollFindNearestBody(s_thrownBodyStart, launchDir, 260.0f, -1.0f, NULL);
                 if (bslot >= 0) {
                     gevrRagdollThrowBody(bslot, throwVel);
                     s_thrownBodySlot = bslot;
                     s_thrownBodyAge = 0.0f;
                     s_thrownBodyHitCount = 0;
-                    gevrJnThrownBodyInit(&s_thrownBody, 80.0f, 1600.0f);
+                    gevrLnThrownBodyInit(&s_thrownBody, 80.0f, 1600.0f);
                 }
-                jnSfx(GEVR_JN_SFX_FORCE_PUSH, 1.0f);
+                lnSfx(GEVR_LN_SFX_FORCE_PUSH, 1.0f);
                 s_chokeActive = 0;
                 s_chokeChr = NULL;
-                jnHaptic(fCtrl, 0.9f, 0.10f);
+                lnHaptic(fCtrl, 0.9f, 0.10f);
             } else if (s_grabBodySlot >= 0) {
                 float launchDir[3] = { forceAim[0], forceAim[1], forceAim[2] };
-                if (g_gevrStereo && sqrtf(jnDot3(fVelCm, fVelCm)) > 240.0f) {
-                    jnNorm3(fVelCm, launchDir);
+                if (g_gevrStereo && sqrtf(lnDot3(fVelCm, fVelCm)) > 240.0f) {
+                    lnNorm3(fVelCm, launchDir);
                 }
                 const float throwVel[3] = { launchDir[0] * 1600.0f, launchDir[1] * 1600.0f + 180.0f, launchDir[2] * 1600.0f };
                 gevrRagdollGetBodyPos(s_grabBodySlot, s_thrownBodyStart);
@@ -1953,19 +1953,19 @@ void gevrJnGameTick(s32 ticks60)
                 s_thrownBodySlot = s_grabBodySlot;
                 s_thrownBodyAge = 0.0f;
                 s_thrownBodyHitCount = 0;
-                gevrJnThrownBodyInit(&s_thrownBody, 80.0f, 1600.0f);
-                jnSfx(GEVR_JN_SFX_FORCE_PUSH, 0.95f);
+                gevrLnThrownBodyInit(&s_thrownBody, 80.0f, 1600.0f);
+                lnSfx(GEVR_LN_SFX_FORCE_PUSH, 0.95f);
                 s_grabBodySlot = -1;
-                jnHaptic(fCtrl, 0.9f, 0.10f);
+                lnHaptic(fCtrl, 0.9f, 0.10f);
             } else if (s_caughtProjIdx >= 0) {
-                if (jnProjValidAirborne(s_caughtProjIdx) && g_CurrentPlayer && g_CurrentPlayer->prop) {
+                if (lnProjValidAirborne(s_caughtProjIdx) && g_CurrentPlayer && g_CurrentPlayer->prop) {
                     Projectile *pr = &g_Projectiles[s_caughtProjIdx];
                     pr->speed.x = forceAim[0] * 28.0f;
                     pr->speed.y = forceAim[1] * 28.0f;
                     pr->speed.z = forceAim[2] * 28.0f;
                     pr->ownerprop = g_CurrentPlayer->prop;
-                    jnAddSpark(pr->obj->prop->pos.f, 0x88E0FFFFu, 22.0f, 0.22f);
-                    jnSfx(GEVR_JN_SFX_FORCE_PUSH, 1.05f);
+                    lnAddSpark(pr->obj->prop->pos.f, 0x88E0FFFFu, 22.0f, 0.22f);
+                    lnSfx(GEVR_LN_SFX_FORCE_PUSH, 1.05f);
                 }
                 s_caughtProjIdx = -1;
             }
@@ -1974,8 +1974,8 @@ void gevrJnGameTick(s32 ticks60)
             s_grabBodySlot = -1;
         }
 
-        if (s_limbBallSuspended && VrJediNinjaMode == GEVR_JN_JEDI) {
-            int kept = gevrRagdollPullLooseLimbs(forceOrigin, ballCenter, 360.0f, s_time, GEVR_JN_MAX_LIMBS);
+        if (s_limbBallSuspended && VrLaserswordNinjaMode == GEVR_LN_LASERSWORD) {
+            int kept = gevrRagdollPullLooseLimbs(forceOrigin, ballCenter, 360.0f, s_time, GEVR_LN_MAX_LIMBS);
             if (kept <= 0 && !offHold) {
                 s_limbBallSuspended = 0;
             } else {
@@ -1983,13 +1983,13 @@ void gevrJnGameTick(s32 ticks60)
             }
         }
 
-        if (offDouble && VrJediNinjaMode == GEVR_JN_JEDI) {
+        if (offDouble && VrLaserswordNinjaMode == GEVR_LN_LASERSWORD) {
             if (s_limbBallSuspended) {
                 gevrRagdollLaunchLooseLimbs(s_limbBallPos, forceAim, 1800.0f, 190.0f);
                 const s32 n = get_numguards();
                 for (s32 i = 0; i < n; i++) {
                     ChrRecord *c = &g_ChrSlots[i];
-                    if (!jnIsEnemyGuard(c)) continue;
+                    if (!lnIsEnemyGuard(c)) continue;
                     const float tgt[3] = { c->prop->pos.x, c->prop->pos.y + 100.0f, c->prop->pos.z };
                     const float dx = tgt[0] - forceOrigin[0];
                     const float dy = tgt[1] - forceOrigin[1];
@@ -1997,19 +1997,19 @@ void gevrJnGameTick(s32 ticks60)
                     const float d = sqrtf(dx * dx + dy * dy + dz * dz);
                     if (d < 1.0f || d > 950.0f) continue;
                     const float dir[3] = { dx / d, dy / d, dz / d };
-                    if (jnDot3(forceAim, dir) < 0.65f) continue;
-                    if (!jnHasLos(forceOrigin, pStan, pOrigin, tgt)) continue;
-                    const float dmg = gevrJnLimbBlastDamage(d);
+                    if (lnDot3(forceAim, dir) < 0.65f) continue;
+                    if (!lnHasLos(forceOrigin, pStan, pOrigin, tgt)) continue;
+                    const float dmg = gevrLnLimbBlastDamage(d);
                     if (dmg >= 80.0f) {
-                        jnHitGuardWithBlade(c, dir, 24.0f, 1, 0);
+                        lnHitGuardWithBlade(c, dir, 24.0f, 1, 0);
                     } else if (dmg > 0.0f) {
-                        jnHitGuardWithBlade(c, dir, dmg * 0.05f, 0, 0);
+                        lnHitGuardWithBlade(c, dir, dmg * 0.05f, 0, 0);
                     }
                 }
                 s_limbBallSuspended = 0;
-                jnHaptic(fCtrl, 1.0f, 0.12f);
+                lnHaptic(fCtrl, 1.0f, 0.12f);
             } else {
-                jnTriggerForcePush(forceOrigin, forceAim);
+                lnTriggerForcePush(forceOrigin, forceAim);
             }
         }
     }
@@ -2028,7 +2028,7 @@ void gevrJnGameTick(s32 ticks60)
             const s32 n = get_numguards();
             for (s32 i = 0; i < n; i++) {
                 ChrRecord *c = &g_ChrSlots[i];
-                if (!jnIsEnemyGuard(c)) continue;
+                if (!lnIsEnemyGuard(c)) continue;
                 int seen = 0;
                 for (int h = 0; h < s_thrownBodyHitCount; h++) {
                     if (s_thrownBodyHit[h] == c) { seen = 1; break; }
@@ -2041,13 +2041,13 @@ void gevrJnGameTick(s32 ticks60)
 
                 if (s_thrownBodyHitCount < 8) s_thrownBodyHit[s_thrownBodyHitCount++] = c;
                 float knock = 0.0f;
-                const int impact = gevrJnThrownBodyImpact(&s_thrownBody, travel, &knock);
-                if (impact == GEVR_JN_IMPACT_DISMEMBER) {
-                    jnHitGuardWithBlade(c, forceAim, 24.0f, 3, 0);
-                } else if (impact == GEVR_JN_IMPACT_RAGDOLL_KILL) {
-                    jnHitGuardWithBlade(c, forceAim, 12.0f, 0, 0);
-                } else if (impact == GEVR_JN_IMPACT_KNOCKDOWN) {
-                    jnHitGuardWithBlade(c, forceAim, 0.8f, 0, 0);
+                const int impact = gevrLnThrownBodyImpact(&s_thrownBody, travel, &knock);
+                if (impact == GEVR_LN_IMPACT_DISMEMBER) {
+                    lnHitGuardWithBlade(c, forceAim, 24.0f, 3, 0);
+                } else if (impact == GEVR_LN_IMPACT_RAGDOLL_KILL) {
+                    lnHitGuardWithBlade(c, forceAim, 12.0f, 0, 0);
+                } else if (impact == GEVR_LN_IMPACT_KNOCKDOWN) {
+                    lnHitGuardWithBlade(c, forceAim, 0.8f, 0, 0);
                 }
                 if (knock <= 120.0f) {
                     s_thrownBodySlot = -1;
@@ -2060,12 +2060,12 @@ void gevrJnGameTick(s32 ticks60)
     /* Update procedural DSP audio state */
     const float slashAudio = (s_slash.active || s_offSlash.active) ? 0.85f : 0.0f;
     s_swingAudio01 = fmaxf(vrSwing01, slashAudio);
-    if (VrJnAudio) {
-        gevrJnAudioSetState(1, VrJediNinjaMode == GEVR_JN_JEDI, s_fpIgnite.extend, s_swingAudio01,
+    if (VrLnAudio) {
+        gevrLnAudioSetState(1, VrLaserswordNinjaMode == GEVR_LN_LASERSWORD, s_fpIgnite.extend, s_swingAudio01,
                             (s_chokeActive || s_grabBodySlot >= 0 || s_limbBallSuspended || s_caughtProjIdx >= 0) ? 1 : 0,
                             s_lightningActive, s_thrown.active, s_thrown.isBoomerang);
     } else {
-        gevrJnAudioSetState(0, 0, 0.0f, 0.0f, 0, 0, 0, 0);
+        gevrLnAudioSetState(0, 0, 0.0f, 0.0f, 0, 0, 0, 0);
     }
 }
 
@@ -2073,26 +2073,26 @@ void gevrJnGameTick(s32 ticks60)
 /* Bullet & Melee Interception                                                */
 /* -------------------------------------------------------------------------- */
 
-s32 gevrJnInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
+s32 gevrLnInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
 {
     (void)damageAmount;
-    if (!jnModeActive() || jnUsingGunsOverride() || !jnInGameplay()) return 0;
+    if (!lnModeActive() || lnUsingGunsOverride() || !lnInGameplay()) return 0;
 
     float eye[3], right[3], up[3], fwd[3];
-    jnGetPlayerCameraWorld(eye, right, up, fwd);
+    lnGetPlayerCameraWorld(eye, right, up, fwd);
 
     /* Ninja bullet-slice mid-swing (flat animation OR fast VR tracked blade swing) */
     const int vrSwinging = g_gevrStereo && s_vrBladeValid && s_vrWhooshCd[0] > 0.05f;
-    if (VrJediNinjaMode == GEVR_JN_NINJA && VrNinjaBulletSlice
+    if (VrLaserswordNinjaMode == GEVR_LN_NINJA && VrNinjaBulletSlice
         && (s_slash.active || s_offSlash.active || vrSwinging)) {
         const float cutPt[3] = {
             (g_gevrStereo && s_vrBladeValid) ? (s_vrBladeHiltW[0] + s_vrBladeTipW[0]) * 0.5f : (eye[0] + fwd[0] * 55.0f),
             (g_gevrStereo && s_vrBladeValid) ? (s_vrBladeHiltW[1] + s_vrBladeTipW[1]) * 0.5f : (eye[1] + fwd[1] * 55.0f),
             (g_gevrStereo && s_vrBladeValid) ? (s_vrBladeHiltW[2] + s_vrBladeTipW[2]) * 0.5f : (eye[2] + fwd[2] * 55.0f)
         };
-        jnAddSpark(cutPt, 0xF0F8FFFFu, 26.0f, 0.18f);
-        jnSfx(GEVR_JN_SFX_CLASH_METAL, 1.15f);
-        jnHaptic(VrJediHand ? 0 : 1, 0.7f, 0.06f);
+        lnAddSpark(cutPt, 0xF0F8FFFFu, 26.0f, 0.18f);
+        lnSfx(GEVR_LN_SFX_CLASH_METAL, 1.15f);
+        lnHaptic(VrLaserswordHand ? 0 : 1, 0.7f, 0.06f);
         return 1;
     }
 
@@ -2100,7 +2100,7 @@ s32 gevrJnInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
      * negate to obtain direction from player toward the shooter. */
     const float travel[3] = { vecX, 0.0f, vecZ };
     float toShooter[3];
-    if (!gevrJnBulletTravelToShooter(travel, toShooter)) {
+    if (!gevrLnBulletTravelToShooter(travel, toShooter)) {
         toShooter[0] = fwd[0];
         toShooter[1] = fwd[1];
         toShooter[2] = fwd[2];
@@ -2113,15 +2113,15 @@ s32 gevrJnInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
         const float *handAim = s_ninjaShieldHeld
             ? (s_vrForceValid ? s_vrForceAimW : fwd)
             : (s_vrBladeValid ? s_vrBladeAimW : fwd);
-        res = gevrJnCheckVrBladeBlock(VrJediNinjaMode, s_blocking || s_ninjaShieldHeld,
+        res = gevrLnCheckVrBladeBlock(VrLaserswordNinjaMode, s_blocking || s_ninjaShieldHeld,
                                       s_ninjaShieldHeld, fwd, bDir, handAim, toShooter, reflectDir);
     } else {
-        res = gevrJnCheckBlock(VrJediNinjaMode, s_blocking || s_ninjaShieldHeld,
+        res = gevrLnCheckBlock(VrLaserswordNinjaMode, s_blocking || s_ninjaShieldHeld,
                                s_ninjaShieldHeld, fwd, toShooter, reflectDir);
     }
-    if (res == GEVR_JN_BLOCK_NONE) return 0;
+    if (res == GEVR_LN_BLOCK_NONE) return 0;
 
-    const int perfect = (VrJnPerfectParry != 0 && s_blockHoldSec <= 0.22f && res == GEVR_JN_BLOCK_DEFLECT);
+    const int perfect = (VrLnPerfectParry != 0 && s_blockHoldSec <= 0.22f && res == GEVR_LN_BLOCK_DEFLECT);
     float bladePt[3];
     if (g_gevrStereo && s_ninjaShieldHeld && s_vrForceValid) {
         memcpy(bladePt, s_vrForcePosW, sizeof(bladePt));
@@ -2136,18 +2136,18 @@ s32 gevrJnInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
     }
 
     unsigned int core = 0xFFFFFFFFu, glow = 0xFFD860FFu;
-    if (VrJediNinjaMode == GEVR_JN_JEDI) {
-        gevrJnSaberPalette(VrSaberColor, &core, &glow);
+    if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD) {
+        gevrLnLaserswordPalette(VrLaserswordColor, &core, &glow);
     }
-    jnAddSpark(bladePt, perfect ? 0xFFF480FFu : (res == GEVR_JN_BLOCK_DEFLECT && VrJediNinjaMode == GEVR_JN_JEDI ? glow : 0xFFE860FFu),
-               perfect ? 38.0f : (VrJediNinjaMode == GEVR_JN_JEDI ? 28.0f : 20.0f), 0.22f);
-    jnSfx(res == GEVR_JN_BLOCK_DEFLECT ? GEVR_JN_SFX_DEFLECT : GEVR_JN_SFX_CLASH_METAL, perfect ? 1.45f : 1.0f);
-    jnHaptic(VrJediHand ? 0 : 1, perfect ? 1.0f : 0.85f, perfect ? 0.10f : 0.07f);
+    lnAddSpark(bladePt, perfect ? 0xFFF480FFu : (res == GEVR_LN_BLOCK_DEFLECT && VrLaserswordNinjaMode == GEVR_LN_LASERSWORD ? glow : 0xFFE860FFu),
+               perfect ? 38.0f : (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD ? 28.0f : 20.0f), 0.22f);
+    lnSfx(res == GEVR_LN_BLOCK_DEFLECT ? GEVR_LN_SFX_DEFLECT : GEVR_LN_SFX_CLASH_METAL, perfect ? 1.45f : 1.0f);
+    lnHaptic(VrLaserswordHand ? 0 : 1, perfect ? 1.0f : 0.85f, perfect ? 0.10f : 0.07f);
 
-    if (res == GEVR_JN_BLOCK_DEFLECT) {
-        ChrRecord *shooter = jnFindForceTarget(bladePt, reflectDir, 2200.0f, 0.70f);
+    if (res == GEVR_LN_BLOCK_DEFLECT) {
+        ChrRecord *shooter = lnFindForceTarget(bladePt, reflectDir, 2200.0f, 0.70f);
         if (!shooter && g_gevrStereo) {
-            shooter = jnFindForceTarget(eye, fwd, 2200.0f, 0.70f);
+            shooter = lnFindForceTarget(eye, fwd, 2200.0f, 0.70f);
         }
         if (shooter) {
             const float tgt[3] = {
@@ -2157,22 +2157,22 @@ s32 gevrJnInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
             };
             const float dir[3] = { tgt[0] - bladePt[0], tgt[1] - bladePt[1], tgt[2] - bladePt[2] };
             float nd[3];
-            jnNorm3(dir, nd);
-            const unsigned int boltCol = gevrJnBlastersActive()
+            lnNorm3(dir, nd);
+            const unsigned int boltCol = gevrLnLasersActive()
                 ? (perfect ? 0xFFF480FFu : 0x58E8FFFFu)
-                : (VrJediNinjaMode == GEVR_JN_JEDI ? glow : 0xFFD840FFu);
-            jnAddTracer(bladePt, tgt, boltCol, 0.18f);
-            jnHitGuardWithBlade(shooter, nd, perfect ? 18.0f : 3.5f, 0, 1);
+                : (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD ? glow : 0xFFD840FFu);
+            lnAddTracer(bladePt, tgt, boltCol, 0.18f);
+            lnHitGuardWithBlade(shooter, nd, perfect ? 18.0f : 3.5f, 0, 1);
         } else {
             const float farPt[3] = {
                 bladePt[0] + reflectDir[0] * 900.0f,
                 bladePt[1] + reflectDir[1] * 900.0f,
                 bladePt[2] + reflectDir[2] * 900.0f
             };
-            const unsigned int boltCol = gevrJnBlastersActive()
+            const unsigned int boltCol = gevrLnLasersActive()
                 ? (perfect ? 0xFFF480FFu : 0x58E8FFFFu)
                 : glow;
-            jnAddTracer(bladePt, farPt, boltCol, 0.16f);
+            lnAddTracer(bladePt, farPt, boltCol, 0.16f);
         }
     }
     return 1;
@@ -2182,7 +2182,7 @@ s32 gevrJnInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
 /* Fast3D Shaded Geometry Helpers                                             */
 /* -------------------------------------------------------------------------- */
 
-static void jnSetVtx(Vtx *v, f32 x, f32 y, f32 z, u32 rgba)
+static void lnSetVtx(Vtx *v, f32 x, f32 y, f32 z, u32 rgba)
 {
     v->v.ob[0] = (s16)x;
     v->v.ob[1] = (s16)y;
@@ -2195,7 +2195,7 @@ static void jnSetVtx(Vtx *v, f32 x, f32 y, f32 z, u32 rgba)
     v->v.cn[3] = rgba & 0xff;
 }
 
-static u32 jnShadeRgba(u32 rgba, float mul)
+static u32 lnShadeRgba(u32 rgba, float mul)
 {
     if (mul < 0.40f) mul = 0.40f;
     if (mul > 1.0f) mul = 1.0f;
@@ -2205,7 +2205,7 @@ static u32 jnShadeRgba(u32 rgba, float mul)
     return (r << 24) | (g << 16) | (b << 8) | (rgba & 0xffu);
 }
 
-static Gfx *jnBeginGeom(Gfx *gdl, const float originView[3], float scale, int translucent)
+static Gfx *lnBeginGeom(Gfx *gdl, const float originView[3], float scale, int translucent)
 {
     Mtxf mf;
     Mtx *mv = dynAllocateMatrix();
@@ -2232,23 +2232,23 @@ static Gfx *jnBeginGeom(Gfx *gdl, const float originView[3], float scale, int tr
     return gdl;
 }
 
-static void jnOrthoFrame(const float dir[3], float uOut[3], float vOut[3])
+static void lnOrthoFrame(const float dir[3], float uOut[3], float vOut[3])
 {
     const float ref[3] = { fabsf(dir[1]) < 0.9f ? 0.0f : 1.0f, fabsf(dir[1]) < 0.9f ? 1.0f : 0.0f, 0.0f };
-    jnCross3(dir, ref, uOut);
-    jnNorm3(uOut, uOut);
-    jnCross3(dir, uOut, vOut);
-    jnNorm3(vOut, vOut);
+    lnCross3(dir, ref, uOut);
+    lnNorm3(uOut, uOut);
+    lnCross3(dir, uOut, vOut);
+    lnNorm3(vOut, vOut);
 }
 
 /* 6-sided smoothly shaded cylindrical prism from origin along dir*lenMm (mm local) */
-static Gfx *jnEmitPrism(Gfx *gdl, const float aMm[3], const float dir[3], float lenMm,
+static Gfx *lnEmitPrism(Gfx *gdl, const float aMm[3], const float dir[3], float lenMm,
                         float r0Mm, float r1Mm, u32 rgbaBase, u32 rgbaTip, int emissive)
 {
     Vtx *v = dynAllocateVertices(12);
     if (!v) return gdl;
     float u[3], w[3];
-    jnOrthoFrame(dir, u, w);
+    lnOrthoFrame(dir, u, w);
     const float bMm[3] = {
         aMm[0] + dir[0] * lenMm,
         aMm[1] + dir[1] * lenMm,
@@ -2261,10 +2261,10 @@ static Gfx *jnEmitPrism(Gfx *gdl, const float aMm[3], const float dir[3], float 
         const float ny = u[1] * ca + w[1] * sa;
         const float nz = u[2] * ca + w[2] * sa;
         const float ldot = emissive ? 1.0f : (0.72f + 0.28f * (ny * 0.75f + nx * 0.45f - nz * 0.25f));
-        const u32 c0 = emissive ? rgbaBase : jnShadeRgba(rgbaBase, ldot);
-        const u32 c1 = emissive ? rgbaTip : jnShadeRgba(rgbaTip, ldot);
-        jnSetVtx(&v[i], aMm[0] + nx * r0Mm, aMm[1] + ny * r0Mm, aMm[2] + nz * r0Mm, c0);
-        jnSetVtx(&v[6 + i], bMm[0] + nx * r1Mm, bMm[1] + ny * r1Mm, bMm[2] + nz * r1Mm, c1);
+        const u32 c0 = emissive ? rgbaBase : lnShadeRgba(rgbaBase, ldot);
+        const u32 c1 = emissive ? rgbaTip : lnShadeRgba(rgbaTip, ldot);
+        lnSetVtx(&v[i], aMm[0] + nx * r0Mm, aMm[1] + ny * r0Mm, aMm[2] + nz * r0Mm, c0);
+        lnSetVtx(&v[6 + i], bMm[0] + nx * r1Mm, bMm[1] + ny * r1Mm, bMm[2] + nz * r1Mm, c1);
     }
     gSPVertex(gdl++, osVirtualToPhysical(v), 12, 0);
     for (int i = 0; i < 6; i++) {
@@ -2274,11 +2274,11 @@ static Gfx *jnEmitPrism(Gfx *gdl, const float aMm[3], const float dir[3], float 
     return gdl;
 }
 
-static Gfx *jnDrawLightsaberExView(Gfx *gdl, const float hiltView[3], const float dirView[3],
+static Gfx *lnDrawLaserswordExView(Gfx *gdl, const float hiltView[3], const float dirView[3],
                                    float lenCm, float extend01, int colorIdx, float scale, int doubleEnded)
 {
     unsigned int core = 0xFFFFFFFFu, glow = 0x2890FFE8u;
-    gevrJnSaberPalette(colorIdx, &core, &glow);
+    gevrLnLaserswordPalette(colorIdx, &core, &glow);
     const float hiltMm = doubleEnded ? 320.0f : 240.0f;
     const float backOff = doubleEnded ? -160.0f : 0.0f;
     const float fwdOff = doubleEnded ? 160.0f : 240.0f;
@@ -2287,23 +2287,23 @@ static Gfx *jnDrawLightsaberExView(Gfx *gdl, const float hiltView[3], const floa
     const float backEmitter[3] = { -dirView[0] * 160.0f, -dirView[1] * 160.0f, -dirView[2] * 160.0f };
     const float negDir[3] = { -dirView[0], -dirView[1], -dirView[2] };
 
-    Gfx *beg = jnBeginGeom(gdl, hiltView, scale, 0);
+    Gfx *beg = lnBeginGeom(gdl, hiltView, scale, 0);
     if (!beg) return gdl;
     gdl = beg;
-    gdl = jnEmitPrism(gdl, hiltStart, dirView, hiltMm, 17.0f, 15.0f, 0x282A30FFu, 0x808894FFu, 0);
+    gdl = lnEmitPrism(gdl, hiltStart, dirView, hiltMm, 17.0f, 15.0f, 0x282A30FFu, 0x808894FFu, 0);
     if (extend01 > 0.02f) {
         const float bladeMm = (lenCm * 10.0f - 240.0f) * extend01;
-        gdl = jnEmitPrism(gdl, emitter, dirView, bladeMm, 11.0f, 6.0f, core, core, 1);
+        gdl = lnEmitPrism(gdl, emitter, dirView, bladeMm, 11.0f, 6.0f, core, core, 1);
         if (doubleEnded) {
-            gdl = jnEmitPrism(gdl, backEmitter, negDir, bladeMm * 0.92f, 11.0f, 6.0f, core, core, 1);
+            gdl = lnEmitPrism(gdl, backEmitter, negDir, bladeMm * 0.92f, 11.0f, 6.0f, core, core, 1);
         }
-        beg = jnBeginGeom(gdl, hiltView, scale, 1);
+        beg = lnBeginGeom(gdl, hiltView, scale, 1);
         if (beg) {
             gdl = beg;
             const float pulse = 1.0f + 0.08f * sinf(s_time * 38.0f);
-            gdl = jnEmitPrism(gdl, emitter, dirView, bladeMm + 25.0f, 25.0f * pulse, 14.0f * pulse, glow, glow & 0xFFFFFF90u, 1);
+            gdl = lnEmitPrism(gdl, emitter, dirView, bladeMm + 25.0f, 25.0f * pulse, 14.0f * pulse, glow, glow & 0xFFFFFF90u, 1);
             if (doubleEnded) {
-                gdl = jnEmitPrism(gdl, backEmitter, negDir, bladeMm * 0.92f + 25.0f,
+                gdl = lnEmitPrism(gdl, backEmitter, negDir, bladeMm * 0.92f + 25.0f,
                                   25.0f * pulse, 14.0f * pulse, glow, glow & 0xFFFFFF90u, 1);
             }
         }
@@ -2311,49 +2311,49 @@ static Gfx *jnDrawLightsaberExView(Gfx *gdl, const float hiltView[3], const floa
     return gdl;
 }
 
-static Gfx *jnDrawLightsaberView(Gfx *gdl, const float hiltView[3], const float dirView[3],
+static Gfx *lnDrawLaserswordView(Gfx *gdl, const float hiltView[3], const float dirView[3],
                                  float lenCm, float extend01, int colorIdx, float scale)
 {
-    return jnDrawLightsaberExView(gdl, hiltView, dirView, lenCm, extend01, colorIdx, scale, 0);
+    return lnDrawLaserswordExView(gdl, hiltView, dirView, lenCm, extend01, colorIdx, scale, 0);
 }
 
-static Gfx *jnDrawKatanaView(Gfx *gdl, const float hiltView[3], const float dirView[3],
+static Gfx *lnDrawKatanaView(Gfx *gdl, const float hiltView[3], const float dirView[3],
                              float lenCm, int isGold, float scale)
 {
     const float hiltMm = 220.0f;
     const float bladeMm = fmaxf(280.0f, lenCm * 10.0f - hiltMm);
     const float zero[3] = { 0, 0, 0 };
-    Gfx *beg = jnBeginGeom(gdl, hiltView, scale, 0);
+    Gfx *beg = lnBeginGeom(gdl, hiltView, scale, 0);
     if (!beg) return gdl;
     gdl = beg;
-    gdl = jnEmitPrism(gdl, zero, dirView, hiltMm, 15.0f, 14.0f, 0x1E2028FFu, 0x363A44FFu, 0);
+    gdl = lnEmitPrism(gdl, zero, dirView, hiltMm, 15.0f, 14.0f, 0x1E2028FFu, 0x363A44FFu, 0);
     const float tsuba[3] = { dirView[0] * hiltMm, dirView[1] * hiltMm, dirView[2] * hiltMm };
-    gdl = jnEmitPrism(gdl, tsuba, dirView, 18.0f, 36.0f, 34.0f, isGold ? 0xFFD230FFu : 0xC0A040FFu, 0x705820FFu, 0);
+    gdl = lnEmitPrism(gdl, tsuba, dirView, 18.0f, 36.0f, 34.0f, isGold ? 0xFFD230FFu : 0xC0A040FFu, 0x705820FFu, 0);
     const float bladeBase[3] = { dirView[0] * (hiltMm + 18.0f), dirView[1] * (hiltMm + 18.0f), dirView[2] * (hiltMm + 18.0f) };
     const u32 c0 = isGold ? 0xFFE252FFu : 0xD4DCE6FFu;
     const u32 c1 = isGold ? 0xFFF4A8FFu : 0xF8FCFFFFu;
-    return jnEmitPrism(gdl, bladeBase, dirView, bladeMm, 13.0f, 2.5f, c0, c1, 0);
+    return lnEmitPrism(gdl, bladeBase, dirView, bladeMm, 13.0f, 2.5f, c0, c1, 0);
 }
 
-static Gfx *jnDrawShieldView(Gfx *gdl, const float centerView[3], const float rightView[3],
+static Gfx *lnDrawShieldView(Gfx *gdl, const float centerView[3], const float rightView[3],
                              const float upView[3], float scale)
 {
-    Gfx *beg = jnBeginGeom(gdl, centerView, scale, 0);
+    Gfx *beg = lnBeginGeom(gdl, centerView, scale, 0);
     if (!beg) return gdl;
     gdl = beg;
     Vtx *v = dynAllocateVertices(17);
     if (!v) return gdl;
-    jnSetVtx(&v[0], 0, 0, 0, 0x485260FFu);
+    lnSetVtx(&v[0], 0, 0, 0, 0x485260FFu);
     for (int i = 0; i < 8; i++) {
         const float a = (float)i * (6.2831853f / 8.0f);
         const float ca = cosf(a), sa = sinf(a);
         const float sh = 0.72f + 0.28f * sa;
-        jnSetVtx(&v[1 + i], (rightView[0] * ca + upView[0] * sa) * 145.0f,
+        lnSetVtx(&v[1 + i], (rightView[0] * ca + upView[0] * sa) * 145.0f,
                  (rightView[1] * ca + upView[1] * sa) * 145.0f,
-                 (rightView[2] * ca + upView[2] * sa) * 145.0f, jnShadeRgba(0x363E4AFFu, sh));
-        jnSetVtx(&v[9 + i], (rightView[0] * ca + upView[0] * sa) * 180.0f,
+                 (rightView[2] * ca + upView[2] * sa) * 145.0f, lnShadeRgba(0x363E4AFFu, sh));
+        lnSetVtx(&v[9 + i], (rightView[0] * ca + upView[0] * sa) * 180.0f,
                  (rightView[1] * ca + upView[1] * sa) * 180.0f,
-                 (rightView[2] * ca + upView[2] * sa) * 180.0f, jnShadeRgba(0xE6B830FFu, sh));
+                 (rightView[2] * ca + upView[2] * sa) * 180.0f, lnShadeRgba(0xE6B830FFu, sh));
     }
     gSPVertex(gdl++, osVirtualToPhysical(v), 17, 0);
     for (int i = 0; i < 8; i++) {
@@ -2364,14 +2364,14 @@ static Gfx *jnDrawShieldView(Gfx *gdl, const float centerView[3], const float ri
     return gdl;
 }
 
-static Gfx *jnDrawBoomerangView(Gfx *gdl, const float centerView[3], float spinAngle,
+static Gfx *lnDrawBoomerangView(Gfx *gdl, const float centerView[3], float spinAngle,
                                 int variant, float scale)
 {
-    Gfx *beg = jnBeginGeom(gdl, centerView, scale, 0);
+    Gfx *beg = lnBeginGeom(gdl, centerView, scale, 0);
     if (!beg) return gdl;
     gdl = beg;
-    const int isGold = (variant == GEVR_JN_BOOM_GOLD_SHURIKEN || variant == GEVR_JN_BOOM_GOLD_WING);
-    const int isWing = (variant == GEVR_JN_BOOM_WING || variant == GEVR_JN_BOOM_GOLD_WING);
+    const int isGold = (variant == GEVR_LN_BOOM_GOLD_SHURIKEN || variant == GEVR_LN_BOOM_GOLD_WING);
+    const int isWing = (variant == GEVR_LN_BOOM_WING || variant == GEVR_LN_BOOM_GOLD_WING);
     const u32 cCenter = isGold ? 0x20242CFFu : 0x3A424EFFu;
     const u32 cTip = isGold ? 0xFFD432FFu : 0xE8F0F8FFu;
 
@@ -2386,7 +2386,7 @@ static Gfx *jnDrawBoomerangView(Gfx *gdl, const float centerView[3], float spinA
         for (int i = 0; i < 6; i++) {
             float x = p[i][0] * ca - p[i][1] * sa;
             float z = p[i][0] * sa + p[i][1] * ca;
-            jnSetVtx(&v[i], x, 0.0f, z, (i == 0 || i == 3) ? cCenter : cTip);
+            lnSetVtx(&v[i], x, 0.0f, z, (i == 0 || i == 3) ? cCenter : cTip);
         }
         gSPVertex(gdl++, osVirtualToPhysical(v), 6, 0);
         gSP2Triangles(gdl++, 0, 1, 2, 0, 0, 2, 3, 0);
@@ -2396,12 +2396,12 @@ static Gfx *jnDrawBoomerangView(Gfx *gdl, const float centerView[3], float spinA
 
     Vtx *v = dynAllocateVertices(9);
     if (!v) return gdl;
-    jnSetVtx(&v[0], 0, 0, 0, cCenter);
+    lnSetVtx(&v[0], 0, 0, 0, cCenter);
     for (int i = 0; i < 4; i++) {
         const float a = spinAngle + (float)i * 1.5707963f;
         const float ca = cosf(a), sa = sinf(a);
-        jnSetVtx(&v[1 + i * 2], ca * 175.0f, 0.0f, sa * 175.0f, cTip);
-        jnSetVtx(&v[2 + i * 2], cosf(a + 0.55f) * 55.0f, 0.0f, sinf(a + 0.55f) * 55.0f, cCenter);
+        lnSetVtx(&v[1 + i * 2], ca * 175.0f, 0.0f, sa * 175.0f, cTip);
+        lnSetVtx(&v[2 + i * 2], cosf(a + 0.55f) * 55.0f, 0.0f, sinf(a + 0.55f) * 55.0f, cCenter);
     }
     gSPVertex(gdl++, osVirtualToPhysical(v), 9, 0);
     for (int i = 0; i < 4; i++) {
@@ -2410,18 +2410,18 @@ static Gfx *jnDrawBoomerangView(Gfx *gdl, const float centerView[3], float spinA
     return gdl;
 }
 
-static Gfx *jnDrawSparkView(Gfx *gdl, const float centerView[3], float radiusCm, unsigned int rgba, float scale)
+static Gfx *lnDrawSparkView(Gfx *gdl, const float centerView[3], float radiusCm, unsigned int rgba, float scale)
 {
-    Gfx *beg = jnBeginGeom(gdl, centerView, scale, 1);
+    Gfx *beg = lnBeginGeom(gdl, centerView, scale, 1);
     if (!beg) return gdl;
     gdl = beg;
     Vtx *v = dynAllocateVertices(11);
     if (!v) return gdl;
-    jnSetVtx(&v[0], 0, 0, 0, 0xFFFFFFFFu);
+    lnSetVtx(&v[0], 0, 0, 0, 0xFFFFFFFFu);
     for (int i = 0; i < 10; i++) {
         const float a = (float)i * (6.2831853f / 10.0f) + s_time * 8.0f;
         const float r = (i & 1) ? radiusCm * 10.0f : radiusCm * 4.2f;
-        jnSetVtx(&v[1 + i], cosf(a) * r, sinf(a) * r, 0.0f, rgba);
+        lnSetVtx(&v[1 + i], cosf(a) * r, sinf(a) * r, 0.0f, rgba);
     }
     gSPVertex(gdl++, osVirtualToPhysical(v), 11, 0);
     for (int i = 0; i < 10; i++) {
@@ -2430,10 +2430,10 @@ static Gfx *jnDrawSparkView(Gfx *gdl, const float centerView[3], float radiusCm,
     return gdl;
 }
 
-static Gfx *jnDrawLightningView(Gfx *gdl, const float aView[3], const float bView[3],
+static Gfx *lnDrawLightningView(Gfx *gdl, const float aView[3], const float bView[3],
                                 unsigned int outerRgba, float scale, int seed)
 {
-    Gfx *beg = jnBeginGeom(gdl, aView, scale, 1);
+    Gfx *beg = lnBeginGeom(gdl, aView, scale, 1);
     if (!beg) return gdl;
     gdl = beg;
     const int segs = 7;
@@ -2449,8 +2449,8 @@ static Gfx *jnDrawLightningView(Gfx *gdl, const float aView[3], const float bVie
         const float jitter = (i == 0 || i == segs) ? 0.0f : 55.0f * sinf(s_time * 48.0f + (float)(i * 19 + seed));
         const float jv = (i == 0 || i == segs) ? 0.0f : 35.0f * cosf(s_time * 53.0f + (float)(i * 13 + seed));
         const float px = d[0] * u + jitter, py = d[1] * u + jv, pz = d[2] * u;
-        jnSetVtx(&v[i * 2], px + 9.0f, py + 9.0f, pz, outerRgba);
-        jnSetVtx(&v[i * 2 + 1], px - 9.0f, py - 9.0f, pz, 0xFFFFFFFFu);
+        lnSetVtx(&v[i * 2], px + 9.0f, py + 9.0f, pz, outerRgba);
+        lnSetVtx(&v[i * 2 + 1], px - 9.0f, py - 9.0f, pz, 0xFFFFFFFFu);
     }
     gSPVertex(gdl++, osVirtualToPhysical(v), (segs + 1) * 2, 0);
     for (int i = 0; i < segs; i++) {
@@ -2460,7 +2460,7 @@ static Gfx *jnDrawLightningView(Gfx *gdl, const float aView[3], const float bVie
     return gdl;
 }
 
-static void jnWorldToView(const Mtxf *w2s, const float w[3], float s, float out[3])
+static void lnWorldToView(const Mtxf *w2s, const float w[3], float s, float out[3])
 {
     coord3d c;
     c.x = w[0]; c.y = w[1]; c.z = w[2];
@@ -2469,12 +2469,12 @@ static void jnWorldToView(const Mtxf *w2s, const float w[3], float s, float out[
 }
 
 /* Read-only per-eye transform of world-space motion ribbons (never mutates s_trails[]) */
-static Gfx *jnDrawTrailWorld(Gfx *gdl, const Mtxf *w2s, const JnBladeTrail *tr, unsigned int rgba, float scale)
+static Gfx *lnDrawTrailWorld(Gfx *gdl, const Mtxf *w2s, const LnBladeTrail *tr, unsigned int rgba, float scale)
 {
     if (!tr || tr->count < 2 || !w2s) return gdl;
     float origV[3];
-    jnWorldToView(w2s, tr->hilt[0], scale, origV);
-    Gfx *beg = jnBeginGeom(gdl, origV, scale, 1);
+    lnWorldToView(w2s, tr->hilt[0], scale, origV);
+    Gfx *beg = lnBeginGeom(gdl, origV, scale, 1);
     if (!beg) return gdl;
     gdl = beg;
     Vtx *v = dynAllocateVertices(tr->count * 2);
@@ -2484,16 +2484,16 @@ static Gfx *jnDrawTrailWorld(Gfx *gdl, const Mtxf *w2s, const JnBladeTrail *tr, 
     const unsigned int maxA = rgba & 0xFFu;
     for (int i = 0; i < tr->count; i++) {
         float hv[3], tv[3];
-        jnWorldToView(w2s, tr->hilt[i], scale, hv);
-        jnWorldToView(w2s, tr->tip[i], scale, tv);
+        lnWorldToView(w2s, tr->hilt[i], scale, hv);
+        lnWorldToView(w2s, tr->tip[i], scale, tv);
         const float fade = 1.0f - (float)i / (float)tr->count;
         const unsigned int aTip = (unsigned int)((float)maxA * fade * 0.72f);
         const unsigned int aBase = (unsigned int)((float)maxA * fade * 0.16f);
-        jnSetVtx(&v[i * 2 + 0],
+        lnSetVtx(&v[i * 2 + 0],
                  (hv[0] - origV[0]) * invS,
                  (hv[1] - origV[1]) * invS,
                  (hv[2] - origV[2]) * invS, rgb | aBase);
-        jnSetVtx(&v[i * 2 + 1],
+        lnSetVtx(&v[i * 2 + 1],
                  (tv[0] - origV[0]) * invS,
                  (tv[1] - origV[1]) * invS,
                  (tv[2] - origV[2]) * invS, rgb | aTip);
@@ -2506,21 +2506,21 @@ static Gfx *jnDrawTrailWorld(Gfx *gdl, const Mtxf *w2s, const JnBladeTrail *tr, 
     return gdl;
 }
 
-static Gfx *jnDrawSmokeView(Gfx *gdl, const float centerView[3], float radiusCm, float alpha01, float scale)
+static Gfx *lnDrawSmokeView(Gfx *gdl, const float centerView[3], float radiusCm, float alpha01, float scale)
 {
     if (alpha01 <= 0.02f) return gdl;
-    Gfx *beg = jnBeginGeom(gdl, centerView, scale, 1);
+    Gfx *beg = lnBeginGeom(gdl, centerView, scale, 1);
     if (!beg) return gdl;
     gdl = beg;
     Vtx *v = dynAllocateVertices(9);
     if (!v) return gdl;
     const unsigned int a0 = (unsigned int)(alpha01 * 175.0f);
     const unsigned int a1 = (unsigned int)(alpha01 * 38.0f);
-    jnSetVtx(&v[0], 0.0f, 0.0f, 0.0f, 0x38445400u | a0);
+    lnSetVtx(&v[0], 0.0f, 0.0f, 0.0f, 0x38445400u | a0);
     const float r = radiusCm * 10.0f;
     for (int i = 0; i < 8; i++) {
         const float a = (float)i * (6.2831853f / 8.0f) + s_time * 1.4f;
-        jnSetVtx(&v[1 + i], cosf(a) * r, sinf(a) * r, 0.0f, 0x60708400u | a1);
+        lnSetVtx(&v[1 + i], cosf(a) * r, sinf(a) * r, 0.0f, 0x60708400u | a1);
     }
     gSPVertex(gdl++, osVirtualToPhysical(v), 9, 0);
     for (int i = 0; i < 8; i++) {
@@ -2530,44 +2530,44 @@ static Gfx *jnDrawSmokeView(Gfx *gdl, const float centerView[3], float radiusCm,
 }
 
 /* -------------------------------------------------------------------------- */
-/* World Render (Thrown Weapons, Sith/Ninja/Ally Blades, VFX)                 */
+/* World Render (Thrown Weapons, Rival/Ninja/Ally Blades, VFX)                 */
 /* -------------------------------------------------------------------------- */
 
-Gfx *gevrJnDrawWorld(Gfx *gdl)
+Gfx *gevrLnDrawWorld(Gfx *gdl)
 {
-    if (!g_CurrentPlayer || !jnInGameplay()) return gdl;
+    if (!g_CurrentPlayer || !lnInGameplay()) return gdl;
     const Mtxf *w2s = camGetWorldToScreenMtxf();
     if (!w2s) return gdl;
-    const float s = jnViewScale();
+    const float s = lnViewScale();
     Gfx *const startGdl = gdl;
 
-    /* Player's thrown Lightsaber or Boomerang */
+    /* Player's thrown Lasersword or Boomerang */
     if (s_thrown.active) {
         float pv[3];
-        jnWorldToView(w2s, s_thrown.pos, s, pv);
+        lnWorldToView(w2s, s_thrown.pos, s, pv);
         if (pv[2] < -10.0f) {
             if (!s_thrown.isBoomerang) {
                 const float spin[3] = { cosf(s_thrown.spinAngle), 0.0f, sinf(s_thrown.spinAngle) };
-                gdl = jnDrawLightsaberExView(gdl, pv, spin, 105.0f, 1.0f, VrSaberColor, s,
-                                             VrSaberStyle == GEVR_JN_STYLE_DOUBLE);
+                gdl = lnDrawLaserswordExView(gdl, pv, spin, 105.0f, 1.0f, VrLaserswordColor, s,
+                                             VrLaserswordStyle == GEVR_LN_STYLE_DOUBLE);
             } else {
-                gdl = jnDrawBoomerangView(gdl, pv, s_thrown.spinAngle, VrNinjaBoomerang, s);
+                gdl = lnDrawBoomerangView(gdl, pv, s_thrown.spinAngle, VrNinjaBoomerang, s);
             }
         }
     }
 
-    /* Special NPCs (Sith / Evil Ninjas / Jedi Ally) & their thrown boomerangs */
-    for (int i = 0; i < JN_MAX_SPECIAL; i++) {
-        JnSpecialNpc *sp = &s_specials[i];
+    /* Special NPCs (Rivals / Evil Ninjas / Lasersword Ally) & their thrown boomerangs */
+    for (int i = 0; i < LN_MAX_SPECIAL; i++) {
+        LnSpecialNpc *sp = &s_specials[i];
         if (!sp->used) continue;
         if (sp->boomerang.active) {
             float pv[3];
-            jnWorldToView(w2s, sp->boomerang.pos, s, pv);
+            lnWorldToView(w2s, sp->boomerang.pos, s, pv);
             if (pv[2] < -10.0f) {
-                gdl = jnDrawBoomerangView(gdl, pv, sp->boomerang.spinAngle, GEVR_JN_BOOM_SHURIKEN, s);
+                gdl = lnDrawBoomerangView(gdl, pv, sp->boomerang.spinAngle, GEVR_LN_BOOM_SHURIKEN, s);
             }
         }
-        if (!jnChrAliveValid(sp->chr, sp->chrnum)) continue;
+        if (!lnChrAliveValid(sp->chr, sp->chrnum)) continue;
         ChrRecord *c = sp->chr;
 
         float hiltW[3], dirW[3];
@@ -2583,12 +2583,12 @@ Gfx *gevrJnDrawWorld(Gfx *gdl)
             dirW[0] = sy * 0.60f;
             dirW[1] = 0.72f;
             dirW[2] = cy * 0.60f;
-            jnNorm3(dirW, dirW);
+            lnNorm3(dirW, dirW);
         }
         if (sp->swingTimer > 0.0f) {
             const float swingDrop = sinf((sp->swingTimer / 0.28f) * 3.14159f) * 0.65f;
             dirW[1] -= swingDrop;
-            jnNorm3(dirW, dirW);
+            lnNorm3(dirW, dirW);
         }
 
         const float tipWorld[3] = {
@@ -2597,56 +2597,56 @@ Gfx *gevrJnDrawWorld(Gfx *gdl)
             hiltW[2] + dirW[2] * 100.0f * sp->scale
         };
         float hv[3], tv[3];
-        jnWorldToView(w2s, hiltW, s, hv);
+        lnWorldToView(w2s, hiltW, s, hv);
         if (hv[2] >= -10.0f) continue;
-        jnWorldToView(w2s, tipWorld, s, tv);
+        lnWorldToView(w2s, tipWorld, s, tv);
         float d[3] = { tv[0] - hv[0], tv[1] - hv[1], tv[2] - hv[2] };
-        jnNorm3(d, d);
-        if (sp->kind == JN_NPC_SITH || sp->kind == JN_NPC_ALLY_JEDI) {
-            gdl = jnDrawLightsaberExView(gdl, hv, d, 110.0f * sp->scale, sp->ignite.extend, sp->color, s,
-                                         sp->kind == JN_NPC_SITH && sp->doubleBladed);
+        lnNorm3(d, d);
+        if (sp->kind == LN_NPC_RIVAL || sp->kind == LN_NPC_ALLY_LASERSWORD) {
+            gdl = lnDrawLaserswordExView(gdl, hv, d, 110.0f * sp->scale, sp->ignite.extend, sp->color, s,
+                                         sp->kind == LN_NPC_RIVAL && sp->doubleBladed);
         } else {
-            gdl = jnDrawKatanaView(gdl, hv, d, 105.0f, 0, s);
+            gdl = lnDrawKatanaView(gdl, hv, d, 105.0f, 0, s);
         }
     }
 
     /* Ninja Shadow-Step smoke clouds */
-    for (int i = 0; i < JN_MAX_SMOKE; i++) {
+    for (int i = 0; i < LN_MAX_SMOKE; i++) {
         if (!s_smoke[i].used) continue;
         float pv[3];
-        jnWorldToView(w2s, s_smoke[i].pos, s, pv);
+        lnWorldToView(w2s, s_smoke[i].pos, s, pv);
         if (pv[2] < -10.0f) {
             const float u = s_smoke[i].age / s_smoke[i].maxAge;
-            gdl = jnDrawSmokeView(gdl, pv, s_smoke[i].radius * (0.6f + 0.9f * u), 1.0f - u, s);
+            gdl = lnDrawSmokeView(gdl, pv, s_smoke[i].radius * (0.6f + 0.9f * u), 1.0f - u, s);
         }
     }
 
     /* Clash / ricochet starbursts */
-    for (int i = 0; i < JN_MAX_SPARKS; i++) {
+    for (int i = 0; i < LN_MAX_SPARKS; i++) {
         if (!s_sparks[i].used) continue;
         float pv[3];
-        jnWorldToView(w2s, s_sparks[i].pos, s, pv);
+        lnWorldToView(w2s, s_sparks[i].pos, s, pv);
         if (pv[2] < -10.0f) {
             const float k = 1.0f - s_sparks[i].age / s_sparks[i].maxAge;
-            gdl = jnDrawSparkView(gdl, pv, s_sparks[i].radius * (0.4f + 0.8f * k), s_sparks[i].rgba, s);
+            gdl = lnDrawSparkView(gdl, pv, s_sparks[i].radius * (0.4f + 0.8f * k), s_sparks[i].rgba, s);
         }
     }
 
     /* Deflected laser bolts */
-    for (int i = 0; i < JN_MAX_TRACERS; i++) {
+    for (int i = 0; i < LN_MAX_TRACERS; i++) {
         if (!s_tracers[i].used) continue;
         float av[3], bv[3];
-        jnWorldToView(w2s, s_tracers[i].from, s, av);
-        jnWorldToView(w2s, s_tracers[i].to, s, bv);
-        gdl = jnDrawLightningView(gdl, av, bv, s_tracers[i].rgba, s, i * 7);
+        lnWorldToView(w2s, s_tracers[i].from, s, av);
+        lnWorldToView(w2s, s_tracers[i].to, s, bv);
+        gdl = lnDrawLightningView(gdl, av, bv, s_tracers[i].rgba, s, i * 7);
     }
 
-    /* Sith NPC Force Lightning */
-    if (s_sithLightningShow > 0.0f) {
+    /* Rival NPC Force Lightning */
+    if (s_rivalLightningShow > 0.0f) {
         float av[3], bv[3];
-        jnWorldToView(w2s, s_sithLightningFrom, s, av);
-        jnWorldToView(w2s, s_sithLightningTo, s, bv);
-        gdl = jnDrawLightningView(gdl, av, bv, 0xFF3838FFu, s, 42);
+        lnWorldToView(w2s, s_rivalLightningFrom, s, av);
+        lnWorldToView(w2s, s_rivalLightningTo, s, bv);
+        gdl = lnDrawLightningView(gdl, av, bv, 0xFF3838FFu, s, 42);
     }
 
     if (gdl != startGdl) {
@@ -2658,16 +2658,16 @@ Gfx *gevrJnDrawWorld(Gfx *gdl)
 }
 
 /* -------------------------------------------------------------------------- */
-/* First-Person Viewmodel Render (Lightsaber, Swords, Shield, Force FX)       */
+/* First-Person Viewmodel Render (Lasersword, Swords, Shield, Force FX)       */
 /* -------------------------------------------------------------------------- */
 
-Gfx *gevrJnDrawFirstPerson(Gfx *gdl)
+Gfx *gevrLnDrawFirstPerson(Gfx *gdl)
 {
-    if (!jnModeActive() || jnUsingGunsOverride() || !jnInGameplay()) return gdl;
+    if (!lnModeActive() || lnUsingGunsOverride() || !lnInGameplay()) return gdl;
     const Mtxf *w2s = camGetWorldToScreenMtxf();
-    const float s = jnViewScale();
-    const float sideSign = VrJediHand ? -1.0f : 1.0f;
-    const int bCtrl = VrJediHand ? 0 : 1;
+    const float s = lnViewScale();
+    const float sideSign = VrLaserswordHand ? -1.0f : 1.0f;
+    const int bCtrl = VrLaserswordHand ? 0 : 1;
     const int fCtrl = 1 - bCtrl;
     Gfx *const startGdl = gdl;
 
@@ -2678,11 +2678,11 @@ Gfx *gevrJnDrawFirstPerson(Gfx *gdl)
     int haveVrOff = 0;
     if (g_gevrStereo) {
         float ob[3];
-        if (gevrJnGetGripAxes(fCtrl, offHilt, offRight, offUp, ob)) {
+        if (gevrLnGetGripAxes(fCtrl, offHilt, offRight, offUp, ob)) {
             offDir[0] = -ob[0] * 0.35f + offUp[0] * 0.94f;
             offDir[1] = -ob[1] * 0.35f + offUp[1] * 0.94f;
             offDir[2] = -ob[2] * 0.35f + offUp[2] * 0.94f;
-            jnNorm3(offDir, offDir);
+            lnNorm3(offDir, offDir);
             haveVrOff = 1;
         }
     }
@@ -2693,11 +2693,11 @@ Gfx *gevrJnDrawFirstPerson(Gfx *gdl)
         int haveVr = 0;
         if (g_gevrStereo) {
             float r[3], u[3], b[3];
-            if (gevrJnGetGripAxes(bCtrl, hilt, r, u, b)) {
+            if (gevrLnGetGripAxes(bCtrl, hilt, r, u, b)) {
                 tipDir[0] = -b[0] * 0.35f + u[0] * 0.94f;
                 tipDir[1] = -b[1] * 0.35f + u[1] * 0.94f;
                 tipDir[2] = -b[2] * 0.35f + u[2] * 0.94f;
-                jnNorm3(tipDir, tipDir);
+                lnNorm3(tipDir, tipDir);
                 haveVr = 1;
             }
         }
@@ -2714,15 +2714,15 @@ Gfx *gevrJnDrawFirstPerson(Gfx *gdl)
                 hilt[0] = 17.0f * sideSign * s; hilt[1] = -14.0f * s; hilt[2] = -32.0f * s;
                 tipDir[0] = -0.22f * sideSign; tipDir[1] = 0.72f; tipDir[2] = -0.66f;
             }
-            jnNorm3(tipDir, tipDir);
+            lnNorm3(tipDir, tipDir);
         }
 
-        if (VrJediNinjaMode == GEVR_JN_JEDI) {
-            const int dbl = (VrSaberStyle == GEVR_JN_STYLE_DOUBLE);
+        if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD) {
+            const int dbl = (VrLaserswordStyle == GEVR_LN_STYLE_DOUBLE);
             unsigned int core = 0xFFFFFFFFu, glow = 0x2890FFE8u;
-            gevrJnSaberPalette(VrSaberColor, &core, &glow);
-            gdl = jnDrawLightsaberExView(gdl, hilt, tipDir, 115.0f, s_fpIgnite.extend, VrSaberColor, s, dbl);
-            if (VrSaberStyle == GEVR_JN_STYLE_DUAL) {
+            gevrLnLaserswordPalette(VrLaserswordColor, &core, &glow);
+            gdl = lnDrawLaserswordExView(gdl, hilt, tipDir, 115.0f, s_fpIgnite.extend, VrLaserswordColor, s, dbl);
+            if (VrLaserswordStyle == GEVR_LN_STYLE_DUAL) {
                 float ohilt[3] = {
                     haveVrOff ? offHilt[0] : -17.0f * sideSign * s,
                     haveVrOff ? offHilt[1] : -14.0f * s,
@@ -2734,26 +2734,26 @@ Gfx *gevrJnDrawFirstPerson(Gfx *gdl)
                     odir[0] = -0.55f * sideSign * (1.0f - 2.0f * u);
                     odir[2] = -0.78f;
                 }
-                jnNorm3(odir, odir);
-                gdl = jnDrawLightsaberView(gdl, ohilt, odir, 105.0f, s_fpIgnite.extend, VrSaberColor, s);
+                lnNorm3(odir, odir);
+                gdl = lnDrawLaserswordView(gdl, ohilt, odir, 105.0f, s_fpIgnite.extend, VrLaserswordColor, s);
             }
-            if (VrJnBladeTrails && w2s) {
-                gdl = jnDrawTrailWorld(gdl, w2s, &s_trails[0], glow, s);
-                if (dbl) gdl = jnDrawTrailWorld(gdl, w2s, &s_trails[1], glow, s);
-                if (VrSaberStyle == GEVR_JN_STYLE_DUAL) gdl = jnDrawTrailWorld(gdl, w2s, &s_trails[2], glow, s);
+            if (VrLnBladeTrails && w2s) {
+                gdl = lnDrawTrailWorld(gdl, w2s, &s_trails[0], glow, s);
+                if (dbl) gdl = lnDrawTrailWorld(gdl, w2s, &s_trails[1], glow, s);
+                if (VrLaserswordStyle == GEVR_LN_STYLE_DUAL) gdl = lnDrawTrailWorld(gdl, w2s, &s_trails[2], glow, s);
             }
-        } else if (VrJediNinjaMode == GEVR_JN_NINJA) {
-            const int sw = jnEffectiveNinjaSword();
-            const unsigned int nTrailRgba = gevrJnIsGoldSword(sw) ? 0xFFE058D8u : 0xD8ECFFD8u;
-            if (gevrJnSelectedNinjaSlot == GEVR_JN_NINJA_SLOT_BOOMERANG) {
+        } else if (VrLaserswordNinjaMode == GEVR_LN_NINJA) {
+            const int sw = lnEffectiveNinjaSword();
+            const unsigned int nTrailRgba = gevrLnIsGoldSword(sw) ? 0xFFE058D8u : 0xD8ECFFD8u;
+            if (gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_BOOMERANG) {
                 const float bp[3] = { 16.0f * sideSign * s, -11.0f * s, -34.0f * s };
-                gdl = jnDrawBoomerangView(gdl, haveVr ? hilt : bp, s_time * 3.0f, VrNinjaBoomerang, s);
+                gdl = lnDrawBoomerangView(gdl, haveVr ? hilt : bp, s_time * 3.0f, VrNinjaBoomerang, s);
             } else {
-                const float reachCm = gevrJnWeaponReachCm(GEVR_JN_NINJA, sw);
-                gdl = jnDrawKatanaView(gdl, hilt, tipDir, reachCm, gevrJnIsGoldSword(sw), s);
+                const float reachCm = gevrLnWeaponReachCm(GEVR_LN_NINJA, sw);
+                gdl = lnDrawKatanaView(gdl, hilt, tipDir, reachCm, gevrLnIsGoldSword(sw), s);
             }
             /* Off-hand dual short sword or Ninja Shield */
-            if (gevrJnIsDualSword(GEVR_JN_NINJA, sw)) {
+            if (gevrLnIsDualSword(GEVR_LN_NINJA, sw)) {
                 float ohilt[3] = {
                     haveVrOff ? offHilt[0] : -17.0f * sideSign * s,
                     haveVrOff ? offHilt[1] : -14.0f * s,
@@ -2765,19 +2765,19 @@ Gfx *gevrJnDrawFirstPerson(Gfx *gdl)
                     odir[0] = -0.5f * sideSign * (1.0f - 2.0f * u);
                     odir[2] = -0.8f;
                 }
-                jnNorm3(odir, odir);
-                gdl = jnDrawKatanaView(gdl, ohilt, odir, 70.0f, gevrJnIsGoldSword(sw), s);
-            } else if (jnHasNinjaShield()) {
+                lnNorm3(odir, odir);
+                gdl = lnDrawKatanaView(gdl, ohilt, odir, 70.0f, gevrLnIsGoldSword(sw), s);
+            } else if (lnHasNinjaShield()) {
                 float sc[3] = {
                     haveVrOff ? offHilt[0] : (s_ninjaShieldHeld ? -4.0f * sideSign * s : -18.0f * sideSign * s),
                     haveVrOff ? offHilt[1] : (s_ninjaShieldHeld ? -2.0f * s : -11.0f * s),
                     haveVrOff ? offHilt[2] : (s_ninjaShieldHeld ? -36.0f * s : -30.0f * s)
                 };
-                gdl = jnDrawShieldView(gdl, sc, offRight, offUp, s);
+                gdl = lnDrawShieldView(gdl, sc, offRight, offUp, s);
             }
-            if (VrJnBladeTrails && w2s) {
-                gdl = jnDrawTrailWorld(gdl, w2s, &s_trails[0], nTrailRgba, s);
-                if (gevrJnIsDualSword(GEVR_JN_NINJA, sw)) gdl = jnDrawTrailWorld(gdl, w2s, &s_trails[2], nTrailRgba, s);
+            if (VrLnBladeTrails && w2s) {
+                gdl = lnDrawTrailWorld(gdl, w2s, &s_trails[0], nTrailRgba, s);
+                if (gevrLnIsDualSword(GEVR_LN_NINJA, sw)) gdl = lnDrawTrailWorld(gdl, w2s, &s_trails[2], nTrailRgba, s);
             }
         }
     }
@@ -2785,28 +2785,28 @@ Gfx *gevrJnDrawFirstPerson(Gfx *gdl)
     /* Off-hand Force Lightning arcs */
     if (s_lightningActive && w2s) {
         for (int i = 0; i < s_lightningCount; i++) {
-            if (!jnChrAliveValid(s_lightningChrs[i], s_lightningChrnums[i])) continue;
+            if (!lnChrAliveValid(s_lightningChrs[i], s_lightningChrnums[i])) continue;
             const float tgtW[3] = {
                 s_lightningChrs[i]->prop->pos.x,
                 s_lightningChrs[i]->prop->pos.y + 115.0f,
                 s_lightningChrs[i]->prop->pos.z
             };
             float tv[3];
-            jnWorldToView(w2s, tgtW, s, tv);
-            gdl = jnDrawLightningView(gdl, offHilt, tv, 0x50B8FFFFu, s, i * 11);
+            lnWorldToView(w2s, tgtW, s, tv);
+            gdl = lnDrawLightningView(gdl, offHilt, tv, 0x50B8FFFFu, s, i * 11);
         }
     }
 
     /* Force Choke tether line */
-    if (s_chokeActive && w2s && jnChrAliveValid(s_chokeChr, s_chokeChrnum)) {
+    if (s_chokeActive && w2s && lnChrAliveValid(s_chokeChr, s_chokeChrnum)) {
         const float tgtW[3] = {
             s_chokeChr->prop->pos.x,
             s_chokeChr->prop->pos.y + 125.0f,
             s_chokeChr->prop->pos.z
         };
         float tv[3];
-        jnWorldToView(w2s, tgtW, s, tv);
-        gdl = jnDrawLightningView(gdl, offHilt, tv, 0xFF5050C0u, s, 99);
+        lnWorldToView(w2s, tgtW, s, tv);
+        gdl = lnDrawLightningView(gdl, offHilt, tv, 0xFF5050C0u, s, 99);
     }
 
     if (gdl != startGdl) {

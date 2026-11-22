@@ -445,18 +445,18 @@ extern "C" void vrSettingsSave(void)
     iniPrintf(f, "BloodPatch=%d\n", VrBloodPatch ? 1 : 0);
     iniPrintf(f, "; 1 = Oddjob's hat in place of the throwing knife, from files/mods/oddjob_hat.bin.\n");
     iniPrintf(f, "OddjobHat=%d\n", VrOddjobHat ? 1 : 0);
-    iniPrintf(f, "JediNinjaMode=%d\nJediHand=%d\nSaberColor=%d\nSaberStyle=%d\nNinjaSword=%d\nNinjaBoomerang=%d\n",
-            VrJediNinjaMode, VrJediHand, VrSaberColor, VrSaberStyle, VrNinjaSword, VrNinjaBoomerang);
-    iniPrintf(f, "JediForcePowers=%d\nJediCatchProjectiles=%d\nJnPerfectParry=%d\nJnBladeTrails=%d\nJnAudio=%d\n",
-            VrJediForcePowers ? 1 : 0, VrJediCatchProjectiles ? 1 : 0, VrJnPerfectParry ? 1 : 0,
-            VrJnBladeTrails ? 1 : 0, VrJnAudio ? 1 : 0);
+    iniPrintf(f, "LaserswordNinjaMode=%d\nLaserswordHand=%d\nLaserswordColor=%d\nLaserswordStyle=%d\nNinjaSword=%d\nNinjaBoomerang=%d\n",
+            VrLaserswordNinjaMode, VrLaserswordHand, VrLaserswordColor, VrLaserswordStyle, VrNinjaSword, VrNinjaBoomerang);
+    iniPrintf(f, "LaserswordForcePowers=%d\nLaserswordCatchProjectiles=%d\nLnPerfectParry=%d\nLnBladeTrails=%d\nLnAudio=%d\n",
+            VrLaserswordForcePowers ? 1 : 0, VrLaserswordCatchProjectiles ? 1 : 0, VrLnPerfectParry ? 1 : 0,
+            VrLnBladeTrails ? 1 : 0, VrLnAudio ? 1 : 0);
     iniPrintf(f, "NinjaShield=%d\nNinjaRicochet=%d\nNinjaShadowStep=%d\nNinjaBulletSlice=%d\n",
             VrNinjaShield ? 1 : 0, VrNinjaRicochet ? 1 : 0, VrNinjaShadowStep ? 1 : 0, VrNinjaBulletSlice ? 1 : 0);
-    iniPrintf(f, "SithNpc=%d\nSithInNormalMode=%d\nSithScale=%d\nNinjaNpc=%d\nNinjaInNormalMode=%d\n",
-            VrSithNpc, VrSithInNormalMode ? 1 : 0, VrSithScale, VrNinjaNpc, VrNinjaInNormalMode ? 1 : 0);
-    iniPrintf(f, "AllyJedi=%d\n", VrAllyJedi ? 1 : 0);
-    iniPrintf(f, "JediBlasters=%d\nJediPickupGuns=%d\nNinjaPickupGuns=%d\n",
-            VrJediBlasters ? 1 : 0, VrJediPickupGuns ? 1 : 0, VrNinjaPickupGuns ? 1 : 0);
+    iniPrintf(f, "RivalNpc=%d\nRivalInNormalMode=%d\nRivalScale=%d\nNinjaNpc=%d\nNinjaInNormalMode=%d\n",
+            VrRivalNpc, VrRivalInNormalMode ? 1 : 0, VrRivalScale, VrNinjaNpc, VrNinjaInNormalMode ? 1 : 0);
+    iniPrintf(f, "AllyLasersword=%d\n", VrAllyLasersword ? 1 : 0);
+    iniPrintf(f, "LaserswordLasers=%d\nLaserswordPickupGuns=%d\nNinjaPickupGuns=%d\n",
+            VrLaserswordLasers ? 1 : 0, VrLaserswordPickupGuns ? 1 : 0, VrNinjaPickupGuns ? 1 : 0);
     iniPrintf(f, "Ragdolls=%d\n", VrRagdolls ? 1 : 0);
     iniPrintf(f, "Dismemberment=%d\n", VrDismemberment ? 1 : 0);
     iniPrintf(f, "DismemberDamage=%.1f\n", VrDismemberDamage);
@@ -1028,29 +1028,29 @@ extern "C" void vrSettingsLoad(void)
             else if (strcmp(key, "BeanCommunityEdition") == 0) VrBeanCommunityEdition = ival != 0;
             else if (strcmp(key, "BloodPatch") == 0) VrBloodPatch = ival != 0;
             else if (strcmp(key, "OddjobHat") == 0) VrOddjobHat = ival != 0;
-            else if (strcmp(key, "JediNinjaMode") == 0) VrJediNinjaMode = ival < 0 ? 0 : ival > 2 ? 2 : ival;
-            else if (strcmp(key, "JediHand") == 0) VrJediHand = ival != 0;
-            else if (strcmp(key, "SaberColor") == 0) VrSaberColor = ival < 0 ? 0 : ival > 7 ? 7 : ival;
-            else if (strcmp(key, "SaberStyle") == 0) VrSaberStyle = ival < 0 ? 0 : ival > 2 ? 2 : ival;
-            else if (strcmp(key, "JediForcePowers") == 0) VrJediForcePowers = ival != 0;
-            else if (strcmp(key, "JediCatchProjectiles") == 0) VrJediCatchProjectiles = ival != 0;
-            else if (strcmp(key, "JnPerfectParry") == 0) VrJnPerfectParry = ival != 0;
-            else if (strcmp(key, "JnBladeTrails") == 0) VrJnBladeTrails = ival != 0;
-            else if (strcmp(key, "JnAudio") == 0) VrJnAudio = ival != 0;
+            else if (strcmp(key, "LaserswordNinjaMode") == 0) VrLaserswordNinjaMode = ival < 0 ? 0 : ival > 2 ? 2 : ival;
+            else if (strcmp(key, "LaserswordHand") == 0) VrLaserswordHand = ival != 0;
+            else if (strcmp(key, "LaserswordColor") == 0) VrLaserswordColor = ival < 0 ? 0 : ival > 7 ? 7 : ival;
+            else if (strcmp(key, "LaserswordStyle") == 0) VrLaserswordStyle = ival < 0 ? 0 : ival > 2 ? 2 : ival;
+            else if (strcmp(key, "LaserswordForcePowers") == 0) VrLaserswordForcePowers = ival != 0;
+            else if (strcmp(key, "LaserswordCatchProjectiles") == 0) VrLaserswordCatchProjectiles = ival != 0;
+            else if (strcmp(key, "LnPerfectParry") == 0) VrLnPerfectParry = ival != 0;
+            else if (strcmp(key, "LnBladeTrails") == 0) VrLnBladeTrails = ival != 0;
+            else if (strcmp(key, "LnAudio") == 0) VrLnAudio = ival != 0;
             else if (strcmp(key, "NinjaSword") == 0) VrNinjaSword = ival < 0 ? 0 : ival > 5 ? 5 : ival;
             else if (strcmp(key, "NinjaBoomerang") == 0) VrNinjaBoomerang = ival < 0 ? 0 : ival > 3 ? 3 : ival;
             else if (strcmp(key, "NinjaShield") == 0) VrNinjaShield = ival != 0;
             else if (strcmp(key, "NinjaRicochet") == 0) VrNinjaRicochet = ival != 0;
             else if (strcmp(key, "NinjaShadowStep") == 0) VrNinjaShadowStep = ival != 0;
             else if (strcmp(key, "NinjaBulletSlice") == 0) VrNinjaBulletSlice = ival != 0;
-            else if (strcmp(key, "SithNpc") == 0) VrSithNpc = ival < 0 ? 0 : ival > 2 ? 2 : ival;
-            else if (strcmp(key, "SithInNormalMode") == 0) VrSithInNormalMode = ival != 0;
-            else if (strcmp(key, "SithScale") == 0) VrSithScale = ival < 0 ? 0 : ival > 3 ? 3 : ival;
+            else if (strcmp(key, "RivalNpc") == 0) VrRivalNpc = ival < 0 ? 0 : ival > 2 ? 2 : ival;
+            else if (strcmp(key, "RivalInNormalMode") == 0) VrRivalInNormalMode = ival != 0;
+            else if (strcmp(key, "RivalScale") == 0) VrRivalScale = ival < 0 ? 0 : ival > 3 ? 3 : ival;
             else if (strcmp(key, "NinjaNpc") == 0) VrNinjaNpc = ival < 0 ? 0 : ival > 2 ? 2 : ival;
             else if (strcmp(key, "NinjaInNormalMode") == 0) VrNinjaInNormalMode = ival != 0;
-            else if (strcmp(key, "AllyJedi") == 0) VrAllyJedi = ival != 0;
-            else if (strcmp(key, "JediBlasters") == 0) VrJediBlasters = ival != 0;
-            else if (strcmp(key, "JediPickupGuns") == 0) VrJediPickupGuns = ival != 0;
+            else if (strcmp(key, "AllyLasersword") == 0) VrAllyLasersword = ival != 0;
+            else if (strcmp(key, "LaserswordLasers") == 0) VrLaserswordLasers = ival != 0;
+            else if (strcmp(key, "LaserswordPickupGuns") == 0) VrLaserswordPickupGuns = ival != 0;
             else if (strcmp(key, "NinjaPickupGuns") == 0) VrNinjaPickupGuns = ival != 0;
             else if (strcmp(key, "Ragdolls") == 0) VrRagdolls = ival != 0;
             else if (strcmp(key, "Dismemberment") == 0) VrDismemberment = ival != 0;

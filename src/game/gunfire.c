@@ -1653,8 +1653,8 @@ void CapBeamLengthAndDecideIfRendered(struct BeamRecord *arg0, ITEM_IDS item, co
         arg0->unk28 = (-0.1f - ((f32) (u32)randomGetNext() * (1.0f / UINT_MAX) * 0.3f)) * phi_f12_2;
 #ifdef GEVR
         {
-            extern s32 gevrJnBlastersActive(void);
-            if (gevrJnBlastersActive())
+            extern s32 gevrLnLasersActive(void);
+            if (gevrLnLasersActive())
             {
                 arg0->unk20 = 0.14f * phi_f12_2;
                 arg0->unk28 = 0.0f;

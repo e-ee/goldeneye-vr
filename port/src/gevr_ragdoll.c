@@ -17,14 +17,14 @@
 #include "gun.h"
 #include "bgfog.h"
 #include "random.h"
-#include "gevr_jedi_ninja.h"
+#include "gevr_lasersword_ninja.h"
 
 extern int VrRagdolls, VrDismemberment, VrBodiesStay, VrDismemberChance;
-extern int VrJediNinjaMode;
+extern int VrLaserswordNinjaMode;
 extern int netHordeActive(void);
 
-static int rdEnabled(void) { return VrRagdolls != 0 || VrJediNinjaMode != 0; }
-static int rdDismemberEnabled(void) { return VrDismemberment != 0 || VrJediNinjaMode != 0; }
+static int rdEnabled(void) { return VrRagdolls != 0 || VrLaserswordNinjaMode != 0; }
+static int rdDismemberEnabled(void) { return VrDismemberment != 0 || VrLaserswordNinjaMode != 0; }
 
 /* Bodies kept: Bodies stay, at most RD_BODIES; a Horde run at most a dozen
  * (user, 2026-10-18: "massive slowdowns as bodies pile up" after three
@@ -1158,8 +1158,8 @@ int gevrRagdollGetBodyPos(int slot, float outPos[3])
 int gevrRagdollPullLooseLimbs(const float from[3], const float center[3], float maxDistCm, float timeSec, int maxLimbs)
 {
     if (!rdEnabled() || !pdphysIsReady() || !from || !center || maxLimbs <= 0) return 0;
-    if (maxLimbs > GEVR_JN_MAX_LIMBS) maxLimbs = GEVR_JN_MAX_LIMBS;
-    struct { RdBody *b; int part; } list[GEVR_JN_MAX_LIMBS];
+    if (maxLimbs > GEVR_LN_MAX_LIMBS) maxLimbs = GEVR_LN_MAX_LIMBS;
+    struct { RdBody *b; int part; } list[GEVR_LN_MAX_LIMBS];
     int n = 0;
     const float maxD2 = maxDistCm * maxDistCm;
     for (int i = 0; i < RD_BODIES && n < maxLimbs; i++) {

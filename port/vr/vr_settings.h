@@ -43,12 +43,12 @@ extern int VrBloodPatch;
 /* Mods: Oddjob's hat in place of the throwing knife, from the player's own
  * Nightfire capture (port/src/gevr_oddjobhat.c). Saved as OddjobHat. */
 extern int VrOddjobHat;
-extern int VrJediNinjaMode, VrJediHand, VrSaberColor, VrSaberStyle, VrNinjaSword, VrNinjaBoomerang;
-extern int VrJediForcePowers, VrJediCatchProjectiles, VrJnPerfectParry, VrJnBladeTrails, VrJnAudio;
+extern int VrLaserswordNinjaMode, VrLaserswordHand, VrLaserswordColor, VrLaserswordStyle, VrNinjaSword, VrNinjaBoomerang;
+extern int VrLaserswordForcePowers, VrLaserswordCatchProjectiles, VrLnPerfectParry, VrLnBladeTrails, VrLnAudio;
 extern int VrNinjaShield, VrNinjaRicochet, VrNinjaShadowStep, VrNinjaBulletSlice;
-extern int VrSithNpc, VrSithInNormalMode, VrSithScale, VrNinjaNpc, VrNinjaInNormalMode;
-extern int VrAllyJedi;
-extern int VrJediBlasters, VrJediPickupGuns, VrNinjaPickupGuns;
+extern int VrRivalNpc, VrRivalInNormalMode, VrRivalScale, VrNinjaNpc, VrNinjaInNormalMode;
+extern int VrAllyLasersword;
+extern int VrLaserswordLasers, VrLaserswordPickupGuns, VrNinjaPickupGuns;
 extern int VrRagdolls;
 extern int VrDismemberment;
 extern float VrDismemberDamage;

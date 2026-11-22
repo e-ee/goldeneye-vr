@@ -353,8 +353,8 @@ static s32 gevrPullCandidate(PropRecord *prop)
         return FALSE;
     }
     {
-        extern s32 gevrJnCanPickupProp(PropRecord *prop);
-        if (!gevrJnCanPickupProp(prop))
+        extern s32 gevrLnCanPickupProp(PropRecord *prop);
+        if (!gevrLnCanPickupProp(prop))
         {
             return FALSE;
         }

@@ -45,12 +45,12 @@ extern int VrRagdolls, VrDismemberment, VrDismemberChance;
 extern float VrDismemberDamage;
 extern int VrGexGuns;
 extern int VrBeanFillTextures, VrBloodPatch, VrOddjobHat;
-extern int VrJediNinjaMode, VrJediHand, VrSaberColor, VrSaberStyle, VrNinjaSword, VrNinjaBoomerang;
-extern int VrJediForcePowers, VrJediCatchProjectiles, VrJnPerfectParry, VrJnBladeTrails, VrJnAudio;
+extern int VrLaserswordNinjaMode, VrLaserswordHand, VrLaserswordColor, VrLaserswordStyle, VrNinjaSword, VrNinjaBoomerang;
+extern int VrLaserswordForcePowers, VrLaserswordCatchProjectiles, VrLnPerfectParry, VrLnBladeTrails, VrLnAudio;
 extern int VrNinjaShield, VrNinjaRicochet, VrNinjaShadowStep, VrNinjaBulletSlice;
-extern int VrSithNpc, VrSithInNormalMode, VrSithScale, VrNinjaNpc, VrNinjaInNormalMode;
-extern int VrAllyJedi;
-extern int VrJediBlasters, VrJediPickupGuns, VrNinjaPickupGuns;
+extern int VrRivalNpc, VrRivalInNormalMode, VrRivalScale, VrNinjaNpc, VrNinjaInNormalMode;
+extern int VrAllyLasersword;
+extern int VrLaserswordLasers, VrLaserswordPickupGuns, VrNinjaPickupGuns;
 extern int VrEyeMsaa;
 extern int VrPlayMode, VrBodySlotShow, VrCampaign;
 extern int VrAlly, VrAllyWeapon, VrAllyAggression, VrAllyHealth, VrAllyDamage, VrAllyInvincible;
@@ -186,19 +186,19 @@ static const char *blockedAllyHealth(void)
 
 static int shownThirdPerson(void) { return VrThirdPerson != 0 && !VrPlayMode; }
 static int shownDismember(void) { return VrRagdolls && VrDismemberment; }
-static int shownSith(void) { return VrSithNpc != 0; }
-static int shownSithNormal(void) { return VrSithNpc != 0 && VrJediNinjaMode == 0; }
-static int shownNinjaNormal(void) { return VrNinjaNpc != 0 && VrJediNinjaMode == 0; }
-static const char *blockedJediAlly(void) { return VrAlly ? NULL : "Needs AI ally"; }
-static int jediModeGet(void) { return VrJediNinjaMode == 1 ? 1 : 0; }
-static void jediModeSet(int on)
+static int shownRival(void) { return VrRivalNpc != 0; }
+static int shownRivalNormal(void) { return VrRivalNpc != 0 && VrLaserswordNinjaMode == 0; }
+static int shownNinjaNormal(void) { return VrNinjaNpc != 0 && VrLaserswordNinjaMode == 0; }
+static const char *blockedLaserswordAlly(void) { return VrAlly ? NULL : "Needs AI ally"; }
+static int laserswordModeGet(void) { return VrLaserswordNinjaMode == 1 ? 1 : 0; }
+static void laserswordModeSet(int on)
 {
-    VrJediNinjaMode = on ? 1 : (VrJediNinjaMode == 1 ? 0 : VrJediNinjaMode);
+    VrLaserswordNinjaMode = on ? 1 : (VrLaserswordNinjaMode == 1 ? 0 : VrLaserswordNinjaMode);
 }
-static int ninjaModeGet(void) { return VrJediNinjaMode == 2 ? 1 : 0; }
+static int ninjaModeGet(void) { return VrLaserswordNinjaMode == 2 ? 1 : 0; }
 static void ninjaModeSet(int on)
 {
-    VrJediNinjaMode = on ? 2 : (VrJediNinjaMode == 2 ? 0 : VrJediNinjaMode);
+    VrLaserswordNinjaMode = on ? 2 : (VrLaserswordNinjaMode == 2 ? 0 : VrLaserswordNinjaMode);
 }
 
 static void setScreenFov(float v) { vr_screen_resize(VrScreenDistance, v); }
@@ -408,13 +408,13 @@ static const int s_two[] = { 0, 1 };
 static const int s_four[] = { 0, 1, 2, 3 };
 static const int s_six[] = { 0, 1, 2, 3, 4, 5 };
 static const int s_eight[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-static const char *const s_jnStyleNames[] = { "Single", "Double-Bladed", "Dual Sabers" };
-static const char *const s_jnHandNames[] = { "Right", "Left" };
-static const char *const s_jnColorNames[] = { "Blue", "Green", "Red", "Purple", "Yellow", "White", "Orange", "Gold" };
-static const char *const s_jnSwordNames[] = { "Katana", "Gold Katana", "Short", "Gold Short", "Dual Short", "Dual Gold" };
-static const char *const s_jnBoomNames[] = { "Shuriken", "Wing", "Gold Shuriken", "Gold Wing" };
-static const char *const s_jnNpcNames[] = { "Off", "Random", "Frequent" };
-static const char *const s_jnScaleNames[] = { "Normal", "Random", "Giant", "Tiny" };
+static const char *const s_lnStyleNames[] = { "Single", "Double-Bladed", "Dual Blades" };
+static const char *const s_lnHandNames[] = { "Right", "Left" };
+static const char *const s_lnColorNames[] = { "Blue", "Green", "Red", "Purple", "Yellow", "White", "Orange", "Gold" };
+static const char *const s_lnSwordNames[] = { "Katana", "Gold Katana", "Short", "Gold Short", "Dual Short", "Dual Gold" };
+static const char *const s_lnBoomNames[] = { "Shuriken", "Wing", "Gold Shuriken", "Gold Wing" };
+static const char *const s_lnNpcNames[] = { "Off", "Random", "Frequent" };
+static const char *const s_lnScaleNames[] = { "Normal", "Random", "Giant", "Tiny" };
 static const char *const s_shapeNames[] = { "4:3", "16:9" };
 static const char *const s_playNames[] = { "Flat screen", "Stereo VR" };
 static const int s_ten[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
@@ -715,56 +715,56 @@ static const Row s_rows[] = {
     { .label = "Oddjob's hat", .tooltip = "Oddjob's hat in place of the throwing knife.", .kind = GEVR_SET_TOGGLE,
       .section = GEVR_SEC_MODS, .where = GEVR_SET_INGAME, .ivar = &VrOddjobHat, .def = NAN, .blocked = blockedHat },
 
-    /* Jedi menu (GEVR_SEC_JEDI / Rules > Jedi; mutually exclusive with Ninja mode) */
-    { .label = "Jedi mode", .tooltip = "Lightsaber, Force powers and Sith enemies. Enabling turns Ninja mode off and enables ragdolls/dismemberment.",
-      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .def = NAN,
-      .cpositions = twoPositions, .cget = jediModeGet, .cset = jediModeSet, .ctext = onOffText, .cdefault = 0 },
-    { .label = "Saber style", .tooltip = "Single blade, double-bladed staff, or dual lightsabers in both hands.",
-      .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrSaberStyle,
-      .ivalues = s_three, .names = s_jnStyleNames, .count = 3, .def = NAN },
-    { .label = "Saber colour", .tooltip = "Your lightsaber blade colour.",
-      .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrSaberColor,
-      .ivalues = s_eight, .names = s_jnColorNames, .count = 8, .def = NAN },
-    { .label = "Saber hand", .tooltip = "Which hand holds the primary lightsaber (Force powers on the opposite hand).",
-      .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrJediHand,
-      .ivalues = s_two, .names = s_jnHandNames, .count = 2, .def = NAN },
+    /* Lasersword menu (GEVR_SEC_MODS / Rules > Lasersword; mutually exclusive with Ninja mode) */
+    { .label = "Lasersword mode", .tooltip = "Lasersword, Force powers and rival duelists. Enabling turns Ninja mode off and activates ragdolls/dismemberment.",
+      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .def = NAN,
+      .cpositions = twoPositions, .cget = laserswordModeGet, .cset = laserswordModeSet, .ctext = onOffText, .cdefault = 0 },
+    { .label = "Blade style", .tooltip = "Single blade, double-bladed staff, or dual laserswords in both hands.",
+      .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordStyle,
+      .ivalues = s_three, .names = s_lnStyleNames, .count = 3, .def = NAN },
+    { .label = "Blade colour", .tooltip = "Your lasersword blade colour.",
+      .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordColor,
+      .ivalues = s_eight, .names = s_lnColorNames, .count = 8, .def = NAN },
+    { .label = "Sword hand", .tooltip = "Which hand holds the primary lasersword (Force powers on the opposite hand).",
+      .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordHand,
+      .ivalues = s_two, .names = s_lnHandNames, .count = 2, .def = NAN },
     { .label = "Force powers", .tooltip = "Force Grab/Choke, Pull, Push and Lightning on the opposite hand.",
-      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrJediForcePowers, .def = NAN },
+      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordForcePowers, .def = NAN },
     { .label = "Catch rockets", .tooltip = "Force Pull and Push catch or reflect flying rockets and grenades.",
-      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrJediCatchProjectiles, .def = NAN },
-    { .label = "Perfect parry", .tooltip = "Timed block crits on deflected shots and triggers Sith blade locks.",
-      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrJnPerfectParry, .def = NAN },
+      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordCatchProjectiles, .def = NAN },
+    { .label = "Perfect parry", .tooltip = "Timed block crits on deflected shots and triggers enemy blade locks.",
+      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLnPerfectParry, .def = NAN },
     { .label = "Blade trails", .tooltip = "Swept motion ribbons and sparks when dragging blades across walls.",
-      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrJnBladeTrails, .def = NAN },
-    { .label = "Custom SFX", .tooltip = "Procedural lightsaber hum, Doppler swings, clashes and Force sound effects.",
-      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrJnAudio, .def = NAN },
-    { .label = "Blasters", .tooltip = "NPCs fire visible GoldenEye laser bolts and you start with GoldenEye's Moonraker Laser equipped.",
-      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrJediBlasters, .def = NAN },
-    { .label = "Pick up guns", .tooltip = "Allow picking up dropped guns and ammo in Jedi mode (keycards, armour and gadgets always work).",
-      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrJediPickupGuns, .def = NAN },
-    { .label = "Sith NPCs", .tooltip = "Spawn red-saber Sith enemies with Force powers and high speed/health.",
-      .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrSithNpc,
-      .ivalues = s_three, .names = s_jnNpcNames, .count = 3, .def = NAN },
-    { .label = "  Sith size", .tooltip = "Height scale of spawned Sith NPCs.",
-      .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrSithScale,
-      .ivalues = s_four, .names = s_jnScaleNames, .count = 4, .def = NAN, .shown = shownSith },
-    { .label = "  Sith in normal", .tooltip = "Allow Sith NPCs to spawn even in normal Bond missions.",
-      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrSithInNormalMode,
-      .def = NAN, .shown = shownSithNormal },
-    { .label = "Jedi ally", .tooltip = "Equips your AI ally with a lightsaber and Force powers.",
-      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_JEDI), .where = GEVR_SET_LAUNCHER, .ivar = &VrAllyJedi,
-      .def = NAN, .blocked = blockedJediAlly },
+      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLnBladeTrails, .def = NAN },
+    { .label = "Custom SFX", .tooltip = "Procedural lasersword hum, Doppler swings, clashes and Force sound effects.",
+      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLnAudio, .def = NAN },
+    { .label = "Laser guns", .tooltip = "NPCs fire visible GoldenEye laser bolts and you start with GoldenEye's Moonraker Laser equipped.",
+      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordLasers, .def = NAN },
+    { .label = "Pick up guns", .tooltip = "Allow picking up dropped guns and ammo in Lasersword mode (keycards, armour and gadgets always work).",
+      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordPickupGuns, .def = NAN },
+    { .label = "Rival NPCs", .tooltip = "Spawn red-lasersword rival enemies with Force powers and high speed/health.",
+      .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrRivalNpc,
+      .ivalues = s_three, .names = s_lnNpcNames, .count = 3, .def = NAN },
+    { .label = "  Rival size", .tooltip = "Height scale of spawned rival NPCs.",
+      .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrRivalScale,
+      .ivalues = s_four, .names = s_lnScaleNames, .count = 4, .def = NAN, .shown = shownRival },
+    { .label = "  Rivals in normal", .tooltip = "Allow rival NPCs to spawn even in normal Bond missions.",
+      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrRivalInNormalMode,
+      .def = NAN, .shown = shownRivalNormal },
+    { .label = "Lasersword ally", .tooltip = "Equips your AI ally with a lasersword and Force powers.",
+      .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrAllyLasersword,
+      .def = NAN, .blocked = blockedLaserswordAlly },
 
-    /* Ninja menu (GEVR_SEC_NINJA / Rules > Ninja; mutually exclusive with Jedi mode) */
-    { .label = "Ninja mode", .tooltip = "Katana, boomerangs, shield and Shadow-Step. Enabling turns Jedi mode off and enables ragdolls/dismemberment.",
+    /* Ninja menu (GEVR_SEC_MODS / Rules > Ninja; mutually exclusive with Lasersword mode) */
+    { .label = "Ninja mode", .tooltip = "Katana, boomerangs, shield and Shadow-Step. Enabling turns Lasersword mode off and activates ragdolls/dismemberment.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .def = NAN,
       .cpositions = twoPositions, .cget = ninjaModeGet, .cset = ninjaModeSet, .ctext = onOffText, .cdefault = 0 },
     { .label = "Ninja sword", .tooltip = "Blade style in Ninja mode (short blades need closer range; dual adds an off-hand blade).",
       .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaSword,
-      .ivalues = s_six, .names = s_jnSwordNames, .count = 6, .def = NAN },
+      .ivalues = s_six, .names = s_lnSwordNames, .count = 6, .def = NAN },
     { .label = "Boomerang", .tooltip = "Spinning throwing blade style in Ninja mode.",
       .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaBoomerang,
-      .ivalues = s_four, .names = s_jnBoomNames, .count = 4, .def = NAN },
+      .ivalues = s_four, .names = s_lnBoomNames, .count = 4, .def = NAN },
     { .label = "Ninja shield", .tooltip = "Carry an off-hand shield to deflect bullets back at shooters.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaShield, .def = NAN },
     { .label = "Wall ricochet", .tooltip = "Thrown boomerangs bounce cleanly off walls and corridors before returning.",
@@ -777,7 +777,7 @@ static const Row s_rows[] = {
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaPickupGuns, .def = NAN },
     { .label = "Evil Ninjas", .tooltip = "Spawn sword-and-boomerang Evil Ninja enemies.",
       .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaNpc,
-      .ivalues = s_three, .names = s_jnNpcNames, .count = 3, .def = NAN },
+      .ivalues = s_three, .names = s_lnNpcNames, .count = 3, .def = NAN },
     { .label = "  Ninjas in normal", .tooltip = "Allow Evil Ninja NPCs to spawn even in normal Bond missions.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaInNormalMode,
       .def = NAN, .shown = shownNinjaNormal },

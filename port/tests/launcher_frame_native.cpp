@@ -172,7 +172,7 @@ static int sweep(const char *state) {
                 { GEVR_LSEC_HANDS, GEVR_LSEC_GESTURES, GEVR_LSEC_THROWING, -1, -1 },
                 { GEVR_LSEC_COMFORT, -1, -1, -1, -1 },
                 { GEVR_LSEC_SCREEN, -1, -1, -1, -1 },
-                { GEVR_LSEC_RULES, GEVR_LSEC_ALLY, GEVR_LSEC_CHEATS, GEVR_LSEC_JEDI, GEVR_LSEC_NINJA },
+                { GEVR_LSEC_RULES, GEVR_LSEC_ALLY, GEVR_LSEC_CHEATS, GEVR_LSEC_LASERSWORD, GEVR_LSEC_NINJA },
                 { -1, -1, -1, -1, -1 } };
             const int section = lsec[tab][sub < 0 ? 0 : sub];
             if (section >= 0 && section != GEVR_LSEC_CHEATS) settingsFitControls(api, section, GEVR_SET_LAUNCHER, pageWidth, state);

@@ -8,7 +8,7 @@
 #include "gevr_scope.h"
 #include "gevr_gexweapon.h"
 #include "gevr_bodyslot.h"
-#include "gevr_jedi_ninja.h"
+#include "gevr_lasersword_ninja.h"
 #endif
 #include <string.h>
 #include <stddef.h>
@@ -309,7 +309,7 @@ extern f32 gevrWeaponPanelStickX, gevrWeaponPanelStickY;
 f32 gevrMoveStickX, gevrMoveStickY;
 extern s32 gevrWeaponPanelStep;            /* bondview2.c: trigger steps through the wheel's category */
 extern s32 gevrWeaponPanelLeft;            /* bondview2.c, issue #56: the left hand's panel */
-extern int VrJediNinjaMode;
+extern int VrLaserswordNinjaMode;
 extern s32 gevrLeftPanelAvailable(void);
 extern void gevrCycleHandWeapon(s32 hand, s32 dir);
 #define GEVR_WEAPON_PANEL_HOLD_MS 350
@@ -2370,9 +2370,9 @@ s32 inputReadController(s32 idx, OSContPad *npad)
 #endif
                 const bool rtNow = padRt || mouseRt || flatTouchFire;
                 const bool ltNow = padLt || mouseLt || flatTouchAim;
-                gevrJnInputFeedFlat(rtNow ? 1 : 0, ltNow ? 1 : 0, (mouseRt || mouseLt) && !(padRt || padLt || flatTouchFire || flatTouchAim) ? 1 : 0);
+                gevrLnInputFeedFlat(rtNow ? 1 : 0, ltNow ? 1 : 0, (mouseRt || mouseLt) && !(padRt || padLt || flatTouchFire || flatTouchAim) ? 1 : 0);
 
-                if (VrJediNinjaMode) {
+                if (VrLaserswordNinjaMode) {
                     if (wheelBtn) {
                         if (!s_flatWheelWas) {
                             s_kbdWheelX = s_kbdWheelY = 0.0f;
@@ -2423,13 +2423,13 @@ s32 inputReadController(s32 idx, OSContPad *npad)
                     s_flatWheelWas = false;
                 }
                 {
-                    extern s32 gevrJnSuppressNormalFire(void);
-                    if (gevrJnSuppressNormalFire()) {
+                    extern s32 gevrLnSuppressNormalFire(void);
+                    if (gevrLnSuppressNormalFire()) {
                         npad->button &= ~(Z_TRIG | R_TRIG);
                     }
                 }
             } else {
-                gevrJnInputFeedFlat(0, 0, 0);
+                gevrLnInputFeedFlat(0, 0, 0);
                 if (s_flatWheelWas) {
                     gevrWeaponPanelOpen = 0;
                     gevrWeaponPanelRelease = 0;
@@ -2977,10 +2977,10 @@ s32 inputReadController(s32 idx, OSContPad *npad)
         }
         if (!g_gevrStereo) {
             if (!menu && !gevrNativePauseOpen()) {
-                gevrJnInputFeedFlat(get_button_state(1, "trigger") ? 1 : 0,
+                gevrLnInputFeedFlat(get_button_state(1, "trigger") ? 1 : 0,
                                     get_button_state(0, "trigger") ? 1 : 0, 0);
             } else {
-                gevrJnInputFeedFlat(0, 0, 0);
+                gevrLnInputFeedFlat(0, 0, 0);
             }
         }
         if (get_button_state(1, "a")) npad->button |= A_BUTTON;
@@ -3481,8 +3481,8 @@ s32 inputReadController(s32 idx, OSContPad *npad)
     }
     if (!gevrNativePauseOpen() && !gevrWeaponPanelOpen
         && g_CurrentPlayer && !g_CurrentPlayer->mpmenuon && bossGetStageNum() != LEVELID_TITLE) {
-        extern s32 gevrJnSuppressNormalFire(void);
-        if (gevrJnSuppressNormalFire()) {
+        extern s32 gevrLnSuppressNormalFire(void);
+        if (gevrLnSuppressNormalFire()) {
             npad->button &= ~Z_TRIG;
             gevrVrTriggerDown[0] = 0;
             gevrVrTriggerDown[1] = 0;

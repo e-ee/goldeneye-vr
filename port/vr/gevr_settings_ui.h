@@ -177,16 +177,16 @@ inline void gevrSettingsTabs(const GevrSettingsApi &a, int &openSection, int *op
             int probe[1];
             GevrSettingInfo probeInfo{};
             const bool hasModSubtabs = (s == GEVR_SEC_MODS && a.sectionRows
-                && a.sectionRows(GEVR_LSEC_JEDI, GEVR_SET_LAUNCHER, probe, 1) > 0
-                && a.info(probe[0], &probeInfo) && probeInfo.launcherSection == GEVR_LSEC_JEDI);
+                && a.sectionRows(GEVR_LSEC_LASERSWORD, GEVR_SET_LAUNCHER, probe, 1) > 0
+                && a.info(probe[0], &probeInfo) && probeInfo.launcherSection == GEVR_LSEC_LASERSWORD);
             if (hasModSubtabs) {
                 if (ImGui::BeginTabBar("##mods-subtabs", ImGuiTabBarFlags_FittingPolicyResizeDown)) {
                     if (ImGui::BeginTabItem("General", nullptr, wantedSub == 0 ? ImGuiTabItemFlags_SetSelected : 0)) {
                         gevrSettingsSection(a, GEVR_SEC_MODS, GEVR_SET_INGAME);
                         ImGui::EndTabItem();
                     }
-                    if (ImGui::BeginTabItem("Jedi", nullptr, wantedSub == 1 ? ImGuiTabItemFlags_SetSelected : 0)) {
-                        gevrSettingsSection(a, GEVR_LSEC_JEDI, GEVR_SET_LAUNCHER);
+                    if (ImGui::BeginTabItem("Lasersword", nullptr, wantedSub == 1 ? ImGuiTabItemFlags_SetSelected : 0)) {
+                        gevrSettingsSection(a, GEVR_LSEC_LASERSWORD, GEVR_SET_LAUNCHER);
                         ImGui::EndTabItem();
                     }
                     if (ImGui::BeginTabItem("Ninja", nullptr, wantedSub == 2 ? ImGuiTabItemFlags_SetSelected : 0)) {
