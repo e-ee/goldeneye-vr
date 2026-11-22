@@ -6,10 +6,10 @@ extern "C" {
 #endif
 
 /*
- * Lasersword and Ninja modes (#270): pure C11 math, gesture, projectile and physics
- * core, kept free of game-state headers and atan2f/acosf/asinf overrides
- * (see port/include/gevr_pull.h). Units are Perfect Dark / GoldenEye world
- * units (roughly centimetres), Y up.
+ * Quest VR Lasersword and Ninja modes (#270): pure C11 math, gesture,
+ * projectile, physics, and downloadable asset pack core, kept free of
+ * game-state headers and atan2f/acosf/asinf overrides (see port/include/gevr_pull.h).
+ * Units are Perfect Dark / GoldenEye world units (roughly centimetres), Y up.
  */
 
 enum {
@@ -96,39 +96,6 @@ int gevrLnIsDualSword(int mode, int sword);
 int gevrLnIsGoldSword(int sword);
 float gevrLnRivalScaleFactor(int setting, unsigned int seed);
 
-/* Flat controller & mouse trigger gesture state machine */
-enum {
-    GEVR_LN_TRIG_NONE = 0,
-    GEVR_LN_TRIG_TAP,
-    GEVR_LN_TRIG_DOUBLE_TAP,
-    GEVR_LN_TRIG_HOLD_START,
-    GEVR_LN_TRIG_HOLD_ACTIVE,
-    GEVR_LN_TRIG_HOLD_RELEASE
-};
-
-typedef struct GevrLnTrigger {
-    int down;
-    float heldSec;
-    int holdFired;   /* 0 none, 1 hold active, 2 suppressed after double-tap */
-    float tapTimer;
-    int pendingTap;
-} GevrLnTrigger;
-
-void gevrLnTriggerReset(GevrLnTrigger *t);
-int gevrLnTriggerUpdate(GevrLnTrigger *t, int pressed, float dt);
-
-/* Alternating right-to-left / left-to-right melee slash */
-typedef struct GevrLnSlash {
-    int nextSide;    /* 0: right-to-left, 1: left-to-right */
-    int active;
-    int dir;
-    float t;
-    float duration;
-} GevrLnSlash;
-
-int gevrLnSlashStart(GevrLnSlash *s, int blocking);
-float gevrLnSlashStep(GevrLnSlash *s, float dt);
-
 /* VR wrist-snap gesture detection (units: cm/s, unit aimFwd) */
 int gevrLnVrWristThrow(const float handVelCmS[3], const float aimFwd[3], int releasedFromHold);
 int gevrLnVrWristPull(const float handVelCmS[3], const float aimFwd[3], int triggerHeld);
@@ -187,16 +154,13 @@ typedef struct GevrLnThrownBody {
 void gevrLnThrownBodyInit(GevrLnThrownBody *tb, float massKg, float speedCmS);
 int gevrLnThrownBodyImpact(GevrLnThrownBody *tb, float travelCm, float *outKnockSpeedCmS);
 
-/* Bullet block & deflection cone check */
+/* VR Bullet block & deflection cone check */
 enum {
     GEVR_LN_BLOCK_NONE = 0,
     GEVR_LN_BLOCK_ABSORB,
     GEVR_LN_BLOCK_DEFLECT
 };
 
-int gevrLnCheckBlock(int mode, int blocking, int hasNinjaShield,
-                     const float playerFwd[3], const float toShooterDir[3],
-                     float outReflectDir[3]);
 int gevrLnBulletTravelToShooter(const float bulletTravel[3], float outToShooter[3]);
 int gevrLnCheckVrBladeBlock(int mode, int blocking, int hasNinjaShield,
                             const float playerFwd[3], const float bladeDirW[3],
@@ -206,14 +170,63 @@ int gevrLnSegmentHitCylinder(const float segA[3], const float segB[3],
                              const float cylBase[3], float cylRadius, float cylHeight,
                              float outHitPt[3]);
 
-/* Flat trigger input feed from port/src/input.c */
-void gevrLnInputFeedFlat(int rtDown, int ltDown, int isMouse);
-void gevrLnInputReadFlat(int *rtDown, int *ltDown, int *isMouse);
-
 /* Vector reflection for corridor boomerang ricochets & directional deflection */
 void gevrLnReflectVec(const float v[3], const float n[3], float out[3]);
 
-/* Procedural DSP audio synth (22050 Hz stereo PCM mixer, zero external assets) */
+/* Downloadable mod pack (texture-packs/lasersword-ninja/lasersword_ninja.bin, GEVRLN1 format) */
+enum {
+    GEVR_LN_MESH_HILT_SINGLE = 0,
+    GEVR_LN_MESH_HILT_DOUBLE,
+    GEVR_LN_MESH_KATANA_SILVER,
+    GEVR_LN_MESH_KATANA_GOLD,
+    GEVR_LN_MESH_SHIELD,
+    GEVR_LN_MESH_SHURIKEN,
+    GEVR_LN_MESH_WING,
+    GEVR_LN_MESH_COUNT
+};
+
+enum {
+    GEVR_LN_CLIP_HUM = 0,
+    GEVR_LN_CLIP_FORCE_RUMBLE,
+    GEVR_LN_CLIP_LIGHTNING,
+    GEVR_LN_CLIP_SPIN,
+    GEVR_LN_CLIP_IGNITE,
+    GEVR_LN_CLIP_SLASH_LASERSWORD,
+    GEVR_LN_CLIP_SLASH_STEEL,
+    GEVR_LN_CLIP_DEFLECT,
+    GEVR_LN_CLIP_CLASH_LASERSWORD,
+    GEVR_LN_CLIP_CLASH_METAL,
+    GEVR_LN_CLIP_FORCE_PUSH,
+    GEVR_LN_CLIP_SHADOW_STEP,
+    GEVR_LN_CLIP_COUNT
+};
+
+typedef struct GevrLnVtx {
+    float p[3];
+    unsigned char rgba[4];
+} GevrLnVtx;
+
+typedef struct GevrLnMesh {
+    float emitterOffsetCm;
+    float bladeRadiusCm;
+    int triCount;
+    GevrLnVtx *verts;
+} GevrLnMesh;
+
+typedef struct GevrLnPack {
+    int loaded;
+    GevrLnMesh meshes[GEVR_LN_MESH_COUNT];
+    int clipLen[GEVR_LN_CLIP_COUNT];
+    int clipRate[GEVR_LN_CLIP_COUNT];
+    short *clips[GEVR_LN_CLIP_COUNT];
+} GevrLnPack;
+
+int gevrLnAvailable(void);
+const GevrLnPack *gevrLnPackGet(void);
+int gevrLnPackLoadFile(const char *path);
+void gevrLnPackUnload(void);
+
+/* Pack clip stereo PCM mixer (22050 Hz mono clips mixed to stereo) */
 enum {
     GEVR_LN_SFX_IGNITE = 1,
     GEVR_LN_SFX_SLASH_LASERSWORD,

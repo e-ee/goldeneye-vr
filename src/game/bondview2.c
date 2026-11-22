@@ -21483,11 +21483,6 @@ static Gfx *gevrDrawBodySlotWheel(Gfx *gdl, const GevrBodySlotWheel *slot)
     return gdl;
 }
 
-static s32 gevrControllerWheelAllowed(void)
-{
-    return VrLaserswordNinjaMode != 0;
-}
-
 static Gfx *gevrLnDrawModeWheel(Gfx *gdl, s32 lh, s32 lp)
 {
     static s32 s_lnShown = FALSE;
@@ -21556,7 +21551,7 @@ static Gfx *gevrLnDrawModeWheel(Gfx *gdl, s32 lh, s32 lp)
     gevrWeaponPanelRect[3] = (float) (by0 + GEVR_WP_H) / (float) viGetY();
     gevrWeaponPanelAspect = (float) GEVR_WP_W / (float) GEVR_WP_H;
 
-    if (g_gevrStereo) gDPNoOpTag(gdl++, 0x565C0000); /* VR_WEAPON_PANEL_CAPTURE_BEGIN */
+    gDPNoOpTag(gdl++, 0x565C0000); /* VR_WEAPON_PANEL_CAPTURE_BEGIN */
     gdl = gevrWheelDrawSegments(gdl, cx, cy, s_lnIdx, count, categories, empty);
     gdl = microcode_constructor(gdl);
     for (i = 0; i < count; i++)
@@ -21574,7 +21569,7 @@ static Gfx *gevrLnDrawModeWheel(Gfx *gdl, s32 lh, s32 lp)
     gdl = gevrWpText(gdl, isLasersword ? "LASERSWORD" : "NINJA", cx, cy - lp - 2, 0xC0C8D2FF, lh, GEVR_WC_R0 * 2 - 4, NULL);
     gdl = gevrWpText(gdl, labels[s_lnIdx], cx, cy + 2, 0xFFE65AFF, lh, GEVR_WC_R0 * 2 - 4, NULL);
     gdl = combiner_bayer_lod_perspective(gdl);
-    if (g_gevrStereo) gDPNoOpTag(gdl++, 0x565C0001); /* VR_WEAPON_PANEL_CAPTURE_END */
+    gDPNoOpTag(gdl++, 0x565C0001); /* VR_WEAPON_PANEL_CAPTURE_END */
     return gdl;
 }
 
@@ -21593,7 +21588,7 @@ Gfx *gevrDrawWeaponPanel(Gfx *gdl)
 
     gevrWeaponPanelBody = FALSE;
 
-    if ((!g_gevrStereo && !gevrControllerWheelAllowed()) || g_CurrentPlayer == NULL)
+    if (!g_gevrStereo || g_CurrentPlayer == NULL)
     {
         gevrWeaponPanelOpen = 0;
         gevrWeaponPanelRelease = 0;
@@ -21602,7 +21597,10 @@ Gfx *gevrDrawWeaponPanel(Gfx *gdl)
         return gdl;
     }
 
-    if (VrLaserswordNinjaMode != 0 && !gevrWeaponPanelLeft && (gevrWeaponPanelOpen || gevrWeaponPanelRelease))
+    extern int gevrIsQuestVrApk(void);
+    extern int gevrLnAvailable(void);
+    if (gevrIsQuestVrApk() && VrLaserswordNinjaMode != 0 && gevrLnAvailable()
+        && !gevrWeaponPanelLeft && (gevrWeaponPanelOpen || gevrWeaponPanelRelease))
     {
         s_gevrWpShown = FALSE;
         return gevrLnDrawModeWheel(gdl, lh, lp);
@@ -21718,7 +21716,7 @@ Gfx *gevrDrawWeaponPanel(Gfx *gdl)
     gevrWeaponPanelRect[3] = (float) (by0 + GEVR_WP_H) / (float) viGetY();
     gevrWeaponPanelAspect = (float) GEVR_WP_W / (float) GEVR_WP_H;
 
-    if (g_gevrStereo) gDPNoOpTag(gdl++, 0x565C0000); /* VR_WEAPON_PANEL_CAPTURE_BEGIN */
+    gDPNoOpTag(gdl++, 0x565C0000); /* VR_WEAPON_PANEL_CAPTURE_BEGIN */
 
     gdl = gevrWheelDrawRing(gdl, cx, cy, active);
 
@@ -21795,7 +21793,7 @@ Gfx *gevrDrawWeaponPanel(Gfx *gdl)
                                    cx - GEVR_WP_MODEL_W / 2, cy - GEVR_WP_MODEL_H / 2, GEVR_WP_MODEL_W, GEVR_WP_MODEL_H);
 
     gdl = combiner_bayer_lod_perspective(gdl);
-    if (g_gevrStereo) gDPNoOpTag(gdl++, 0x565C0001); /* VR_WEAPON_PANEL_CAPTURE_END */
+    gDPNoOpTag(gdl++, 0x565C0001); /* VR_WEAPON_PANEL_CAPTURE_END */
     return gdl;
 }
 

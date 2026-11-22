@@ -2,6 +2,7 @@
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import settings_stub_dir
 
@@ -11,6 +12,11 @@ CXX = shutil.which("g++") or "g++"
 
 with tempfile.TemporaryDirectory(prefix="gevr-lasersword-ninja-") as temp:
     temp_dir = Path(temp)
+    pack_path = temp_dir / "lasersword_ninja.bin"
+    bad_path = temp_dir / "bad.bin"
+    bad_path.write_bytes(b"BADMAGIC12345678")
+    subprocess.run([sys.executable, str(ROOT / "tools/gevr_lasersword_ninja_pack.py"), str(pack_path)], check=True)
+
     exe = temp_dir / "lasersword_ninja.exe"
     subprocess.run([
         CC, "-std=c11", "-O2", "-Wall", "-Werror",
@@ -20,7 +26,7 @@ with tempfile.TemporaryDirectory(prefix="gevr-lasersword-ninja-") as temp:
         str(ROOT / "port/src/gevr_lasersword.c"),
         "-lm", "-o", str(exe),
     ], check=True)
-    subprocess.run([str(exe)], check=True)
+    subprocess.run([str(exe), str(pack_path), str(bad_path)], check=True)
 
     # Verify compatibility when GoldenEye overrides math_atan2f/asinf/acosf.
     game = [str(ROOT / "src/game" / name) for name in ("math_atan2f.c", "math_asinfacosf.c", "math_asinacos.c")]
@@ -37,7 +43,7 @@ with tempfile.TemporaryDirectory(prefix="gevr-lasersword-ninja-") as temp:
         *game,
         "-lm", "-o", str(exe),
     ], check=True)
-    subprocess.run([str(exe)], check=True)
+    subprocess.run([str(exe), str(pack_path), str(bad_path)], check=True)
 
     # Verify settings table defaults, Lasersword<->Ninja mutual exclusivity, and Reset all settings.
     stub_dir = temp_dir / "settings"
@@ -87,7 +93,33 @@ int main(void) {
     gevrSettingResetAll();
     assert(VrLaserswordNinjaMode == 0 && gevrSettingIndex(lsword) == 0 && gevrSettingIndex(ninja) == 0);
     assert(VrLaserswordLasers == 1 && VrLaserswordPickupGuns == 0 && VrNinjaPickupGuns == 0);
-    puts("lasersword & ninja settings: defaults, mutual exclusivity and reset passed");
+
+    const int rival = find("Rival NPCs");
+    const int evilNinja = find("Evil Ninjas");
+    const int allyLs = find("Lasersword ally");
+    const int lsItem = find("Lasersword");
+    const int color = find("Blade colour");
+    assert(rival >= 0 && evilNinja >= 0 && allyLs >= 0 && lsItem >= 0 && color >= 0);
+
+    VrAlly = 1;
+    s_lnAvail = 0;
+    assert(gevrSettingBlocked(lsword) != NULL);
+    assert(gevrSettingBlocked(ninja) != NULL);
+    assert(gevrSettingBlocked(rival) != NULL);
+    assert(gevrSettingBlocked(evilNinja) != NULL);
+    assert(gevrSettingBlocked(allyLs) != NULL);
+    s_lnAvail = 1;
+    assert(gevrSettingBlocked(lsword) == NULL);
+    assert(gevrSettingBlocked(ninja) == NULL);
+    assert(gevrSettingBlocked(rival) == NULL);
+    assert(gevrSettingBlocked(evilNinja) == NULL);
+    assert(gevrSettingBlocked(allyLs) == NULL);
+
+    s_questVr = 0;
+    assert(!gevrSettingShown(lsItem) && !gevrSettingShown(lsword) && !gevrSettingShown(ninja) && !gevrSettingShown(color));
+    s_questVr = 1;
+    assert(gevrSettingShown(lsItem) && gevrSettingShown(lsword) && gevrSettingShown(ninja) && gevrSettingShown(color));
+    puts("lasersword & ninja settings: defaults, mutual exclusivity, pack/quest gating and reset passed");
     return 0;
 }
 ''')

@@ -1,5 +1,6 @@
 #include "gevr_lasersword_ninja_game.h"
 #include "gevr_lasersword_ninja.h"
+#include "gevr_lasersword.h"
 #include "gevr_ragdoll.h"
 #include "gevr_ally.h"
 #include "pdphysics.h"
@@ -134,8 +135,6 @@ typedef struct {
     GevrLnThrown boomerang;
 } LnSpecialNpc;
 
-static GevrLnTrigger s_rtTrig, s_ltTrig;
-static GevrLnSlash s_slash, s_offSlash;
 static GevrLnIgnition s_fpIgnite;
 static GevrLnThrown s_thrown;
 static int s_blocking;
@@ -320,7 +319,10 @@ static int lnProjValidAirborne(int idx)
 
 static int lnModeActive(void)
 {
-    return VrLaserswordNinjaMode != 0
+    return gevrIsQuestVrApk()
+        && g_gevrStereo
+        && VrLaserswordNinjaMode != 0
+        && gevrLnPackGet() != NULL
         && g_CurrentPlayer != NULL
         && (!netIsActive() || getPlayerCount() == 1);
 }
@@ -602,37 +604,6 @@ static void lnHitGuardWithBlade(ChrRecord *c, const float dir[3], float dmgAmoun
     }
 }
 
-static void lnPerformMeleeSweep(const float eye[3], const float fwd[3], float reachCm, float dmg)
-{
-    float pOrigin[3];
-    StandTile *pStan = NULL;
-    lnGetPlayerTileOrigin(pOrigin, &pStan);
-
-    const float reach2 = (reachCm + 55.0f) * (reachCm + 55.0f);
-    const s32 n = get_numguards();
-    for (s32 i = 0; i < n; i++) {
-        ChrRecord *c = &g_ChrSlots[i];
-        if (!lnIsEnemyGuard(c)) continue;
-        const float tgt[3] = { c->prop->pos.x, c->prop->pos.y + 100.0f, c->prop->pos.z };
-        const float dx = tgt[0] - eye[0];
-        const float dy = tgt[1] - eye[1];
-        const float dz = tgt[2] - eye[2];
-        const float d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 > reach2 || d2 < 1.0f) continue;
-        const float d = sqrtf(d2);
-        const float to[3] = { dx / d, dy / d, dz / d };
-        if (lnDot3(fwd, to) < 0.35f) continue;
-        if (!lnHasLos(eye, pStan, pOrigin, tgt)) continue;
-        const float horizDist = sqrtf(dx * dx + dz * dz);
-        float hitY = eye[1] + fwd[1] * fmaxf(horizDist, 45.0f);
-        if (hitY < c->prop->pos.y + 35.0f) hitY = c->prop->pos.y + 35.0f;
-        if (hitY > c->prop->pos.y + 168.0f) hitY = c->prop->pos.y + 168.0f;
-        const float hitPt[3] = { c->prop->pos.x, hitY, c->prop->pos.z };
-        lnHitGuardWithBlade(c, to, dmg, 2, 1, hitPt);
-        lnHaptic(VrLaserswordHand ? 0 : 1, 0.8f, 0.08f);
-    }
-}
-
 static int lnVrCanHitChr(int handSlot, ChrRecord *c)
 {
     for (int i = 0; i < LN_VR_HIT_SLOTS; i++) {
@@ -711,10 +682,6 @@ static int lnVrSweepBladeAgainstGuards(int handSlot, const float hiltW[3], const
 
 void gevrLnGameReset(void)
 {
-    gevrLnTriggerReset(&s_rtTrig);
-    gevrLnTriggerReset(&s_ltTrig);
-    memset(&s_slash, 0, sizeof(s_slash));
-    memset(&s_offSlash, 0, sizeof(s_offSlash));
     memset(&s_fpIgnite, 0, sizeof(s_fpIgnite));
     memset(&s_thrown, 0, sizeof(s_thrown));
     memset(s_cuts, 0, sizeof(s_cuts));
@@ -860,6 +827,7 @@ s32 gevrLnCanPickupProp(PropRecord *prop)
 
 static void lnSpawnSpecialNpcs(void)
 {
+    if (!gevrIsQuestVrApk() || !g_gevrStereo || gevrLnPackGet() == NULL) return;
     if (s_specialsSpawned || g_StageNum == LEVELID_TITLE) return;
     const s32 n = get_numguards();
     if (n <= 0) return;
@@ -1024,7 +992,7 @@ static void lnTickSpecialNpcs(const float playerPos[3], float dt)
         if (d <= meleeRange && sp->meleeCd <= 0.0f) {
             sp->swingTimer = 0.28f;
             if (sp->kind == LN_NPC_RIVAL && VrLaserswordNinjaMode == GEVR_LN_LASERSWORD
-                && VrLnPerfectParry && (s_blocking || s_slash.active)
+                && VrLnPerfectParry && s_blocking
                 && lnModeActive() && !lnUsingGunsOverride() && s_bladeLockTimer <= 0.0f) {
                 s_bladeLockTimer = 0.85f;
                 s_bladeLockPulse = 0.0f;
@@ -1082,6 +1050,7 @@ static void lnTickSpecialNpcs(const float playerPos[3], float dt)
 
 s32 gevrLnAllyThink(ChrRecord *ally)
 {
+    if (!gevrIsQuestVrApk() || !g_gevrStereo || gevrLnPackGet() == NULL) return 0;
     if (!VrAllyLasersword || !lnChrAliveValid(ally, -1)) return 0;
 
     LnSpecialNpc *sp = lnFindSpecial(ally);
@@ -1228,33 +1197,6 @@ static void lnTriggerForcePush(const float origin[3], const float dir[3])
     lnHaptic(VrLaserswordHand ? 1 : 0, 0.7f, 0.08f);
 }
 
-/* Compute flat-screen animated world blade segment so trails advance once per tick cleanly */
-static void lnFlatBladeWorld(const float eye[3], const float right[3], const float up[3], const float fwd[3],
-                             float sideSign, float reachCm, float hiltW[3], float tipW[3])
-{
-    float lx, ly, lz, dx, dy, dz;
-    if (s_blocking) {
-        lx = -14.0f * sideSign; ly = -6.0f; lz = -34.0f;
-        dx = 0.65f * sideSign; dy = 0.72f; dz = -0.22f;
-    } else if (s_slash.active) {
-        const float u = s_slash.duration > 0.0f ? s_slash.t / s_slash.duration : 0.0f;
-        const float swing = (s_slash.dir == 0 ? 1.0f - 2.0f * u : -1.0f + 2.0f * u) * sideSign;
-        lx = 14.0f * swing; ly = -10.0f - 4.0f * sinf(u * 3.14159f); lz = -36.0f;
-        dx = -0.55f * swing; dy = 0.35f - 0.5f * u; dz = -0.75f;
-    } else {
-        lx = 17.0f * sideSign; ly = -14.0f; lz = -32.0f;
-        dx = -0.22f * sideSign; dy = 0.72f; dz = -0.66f;
-    }
-    float localDir[3] = { dx, dy, dz };
-    lnNorm3(localDir, localDir);
-    float worldDir[3];
-    for (int k = 0; k < 3; k++) {
-        hiltW[k] = eye[k] + right[k] * lx + up[k] * ly - fwd[k] * lz;
-        worldDir[k] = right[k] * localDir[0] + up[k] * localDir[1] - fwd[k] * localDir[2];
-        tipW[k] = hiltW[k] + worldDir[k] * reachCm;
-    }
-}
-
 /* -------------------------------------------------------------------------- */
 /* Per-Tick Simulation                                                        */
 /* -------------------------------------------------------------------------- */
@@ -1322,7 +1264,7 @@ void gevrLnGameTick(s32 ticks60)
     }
     if (s_rivalLightningShow > 0.0f) s_rivalLightningShow -= dt;
 
-    if (!lnInGameplay()) {
+    if (!lnInGameplay() || !gevrIsQuestVrApk() || !g_gevrStereo || gevrLnPackGet() == NULL) {
         s_blocking = 0;
         s_blockHoldSec = 0.0f;
         s_ninjaShieldHeld = 0;
@@ -1403,7 +1345,7 @@ void gevrLnGameTick(s32 ticks60)
     s_vrOffBladeValid = 0;
     s_vrForceValid = 0;
 
-    if (g_gevrStereo) {
+    {
         const int bDown = get_analog_value(bCtrl, "trigger") > 0.5f;
         const int fDown = get_analog_value(fCtrl, "trigger") > 0.5f;
         if (s_vrPowerCd > 0.0f) s_vrPowerCd -= dt;
@@ -1514,20 +1456,6 @@ void gevrLnGameTick(s32 ticks60)
         }
         s_vrTrigWas[bCtrl] = bDown;
         s_vrTrigWas[fCtrl] = fDown;
-    } else {
-        int rtDown = 0, ltDown = 0, isMouse = 0;
-        gevrLnInputReadFlat(&rtDown, &ltDown, &isMouse);
-        (void)isMouse;
-        const int rtEv = gevrLnTriggerUpdate(&s_rtTrig, rtDown, dt);
-        const int ltEv = gevrLnTriggerUpdate(&s_ltTrig, ltDown, dt);
-
-        if (rtEv == GEVR_LN_TRIG_TAP) bladeTap = 1;
-        if (rtEv == GEVR_LN_TRIG_DOUBLE_TAP) bladeThrow = 1;
-        if (rtEv == GEVR_LN_TRIG_HOLD_START || rtEv == GEVR_LN_TRIG_HOLD_ACTIVE) bladeBlock = 1;
-
-        if (ltEv == GEVR_LN_TRIG_HOLD_START || ltEv == GEVR_LN_TRIG_HOLD_ACTIVE) offHold = 1;
-        if (ltEv == GEVR_LN_TRIG_HOLD_RELEASE) offRelease = 1;
-        if (ltEv == GEVR_LN_TRIG_DOUBLE_TAP) offDouble = 1;
     }
 
     s_blocking = bladeBlock && !s_thrown.active;
@@ -1562,7 +1490,7 @@ void gevrLnGameTick(s32 ticks60)
                 lnAddSpark(clashPt, 0xFFF480FFu, 26.0f, 0.18f);
                 lnHaptic(bCtrl, 0.65f, 0.04f);
             }
-            const float pushIn = g_gevrStereo ? lnDot3(bVelCm, bladeAimW) : 0.0f;
+            const float pushIn = lnDot3(bVelCm, bladeAimW);
             if (bladeTap || pushIn > 150.0f) {
                 float dir[3] = { s_bladeLockChr->prop->pos.x - eye[0], 0.0f, s_bladeLockChr->prop->pos.z - eye[2] };
                 lnNorm3(dir, dir);
@@ -1586,27 +1514,14 @@ void gevrLnGameTick(s32 ticks60)
         }
     }
 
-    /* Flat-screen melee sweep (VR uses real tracked blade collision above) */
-    if (!g_gevrStereo && bladeTap && !s_blocking && !s_thrown.active
-        && !(VrLaserswordNinjaMode == GEVR_LN_NINJA && gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_SHADOW)
-        && !(VrLaserswordNinjaMode == GEVR_LN_NINJA && gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_BOOMERANG)) {
-        if (gevrLnSlashStart(&s_slash, s_blocking)) {
-            const float reachMul = dbl ? 1.12f : 1.0f;
-            lnPerformMeleeSweep(eye, fwd, gevrLnWeaponReachCm(VrLaserswordNinjaMode, sword) * reachMul, 14.0f);
-            lnSfx(VrLaserswordNinjaMode == GEVR_LN_LASERSWORD ? GEVR_LN_SFX_SLASH_LASERSWORD : GEVR_LN_SFX_SLASH_STEEL, 1.0f);
-            if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && VrLaserswordStyle == GEVR_LN_STYLE_DUAL && !s_offSlash.active) {
-                gevrLnSlashStart(&s_offSlash, 0);
-            }
-        }
-    }
-    gevrLnSlashStep(&s_slash, dt);
-    gevrLnSlashStep(&s_offSlash, dt);
-
     /* Sample world-space motion ribbons once per tick (fixes stereo per-eye trail corruption) */
     if (VrLnBladeTrails && !s_thrown.active) {
         if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && s_fpIgnite.extend > 0.25f) {
-            if (g_gevrStereo && s_vrBladeValid) {
-                const float emitOff = dbl ? 16.0f : 24.0f;
+            if (s_vrBladeValid) {
+                const GevrLnPack *pk = gevrLnPackGet();
+                const float emitOff = (pk != NULL)
+                    ? pk->meshes[dbl ? GEVR_LN_MESH_HILT_DOUBLE : GEVR_LN_MESH_HILT_SINGLE].emitterOffsetCm
+                    : (dbl ? 16.0f : 13.5f);
                 const float emitW[3] = {
                     s_vrBladeHiltW[0] + s_vrBladeDirW[0] * emitOff,
                     s_vrBladeHiltW[1] + s_vrBladeDirW[1] * emitOff,
@@ -1615,59 +1530,33 @@ void gevrLnGameTick(s32 ticks60)
                 lnTrailPushWorld(0, emitW, s_vrBladeTipW);
                 if (dbl) {
                     const float emitB[3] = {
-                        s_vrBladeHiltW[0] - s_vrBladeDirW[0] * 16.0f,
-                        s_vrBladeHiltW[1] - s_vrBladeDirW[1] * 16.0f,
-                        s_vrBladeHiltW[2] - s_vrBladeDirW[2] * 16.0f
+                        s_vrBladeHiltW[0] - s_vrBladeDirW[0] * emitOff,
+                        s_vrBladeHiltW[1] - s_vrBladeDirW[1] * emitOff,
+                        s_vrBladeHiltW[2] - s_vrBladeDirW[2] * emitOff
                     };
                     lnTrailPushWorld(1, emitB, s_vrBladeBackW);
                 }
-            } else {
-                const float sideSign = VrLaserswordHand ? -1.0f : 1.0f;
-                float hw[3], tw[3];
-                lnFlatBladeWorld(eye, right, up, fwd, sideSign, 91.0f * s_fpIgnite.extend + 24.0f, hw, tw);
-                lnTrailPushWorld(0, hw, tw);
             }
-            if (VrLaserswordStyle == GEVR_LN_STYLE_DUAL && g_gevrStereo && s_vrOffBladeValid) {
+            if (VrLaserswordStyle == GEVR_LN_STYLE_DUAL && s_vrOffBladeValid) {
                 lnTrailPushWorld(2, s_vrOffHiltW, s_vrOffTipW);
             }
         } else if (VrLaserswordNinjaMode == GEVR_LN_NINJA && gevrLnSelectedNinjaSlot != GEVR_LN_NINJA_SLOT_BOOMERANG) {
-            if (g_gevrStereo && s_vrBladeValid) {
+            if (s_vrBladeValid) {
                 lnTrailPushWorld(0, s_vrBladeHiltW, s_vrBladeTipW);
-            } else {
-                const float sideSign = VrLaserswordHand ? -1.0f : 1.0f;
-                float hw[3], tw[3];
-                lnFlatBladeWorld(eye, right, up, fwd, sideSign, reachCm, hw, tw);
-                lnTrailPushWorld(0, hw, tw);
             }
-            if (gevrLnIsDualSword(GEVR_LN_NINJA, sword) && g_gevrStereo && s_vrOffBladeValid) {
+            if (gevrLnIsDualSword(GEVR_LN_NINJA, sword) && s_vrOffBladeValid) {
                 lnTrailPushWorld(2, s_vrOffHiltW, s_vrOffTipW);
             }
         }
     }
 
-    /* Wall / floor plasma scorch sparks along actual tracked blade segment (or flat sweep) */
+    /* Wall / floor plasma scorch sparks along actual tracked blade segment */
     if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && VrLnBladeTrails && !s_thrown.active
-        && s_fpIgnite.extend > 0.45f && pdphysIsReady()) {
+        && s_fpIgnite.extend > 0.45f && s_vrBladeValid && pdphysIsReady()) {
         float hitPos[3];
-        int hit = 0;
-        if (g_gevrStereo && s_vrBladeValid) {
-            hit = pdphysRaycastAnyRoom(s_vrBladeHiltW, s_vrBladeTipW, hitPos, NULL, NULL);
-            if (!hit && dbl) {
-                hit = pdphysRaycastAnyRoom(s_vrBladeHiltW, s_vrBladeBackW, hitPos, NULL, NULL);
-            }
-        } else {
-            float wDir[3] = {
-                fwd[0] * 0.65f + up[0] * 0.72f + (s_slash.active ? right[0] * 0.25f : 0.0f),
-                fwd[1] * 0.65f + up[1] * 0.72f,
-                fwd[2] * 0.65f + up[2] * 0.72f
-            };
-            lnNorm3(wDir, wDir);
-            const float tipW[3] = {
-                bladeHandW[0] + wDir[0] * 110.0f,
-                bladeHandW[1] + wDir[1] * 110.0f,
-                bladeHandW[2] + wDir[2] * 110.0f
-            };
-            hit = pdphysRaycastAnyRoom(bladeHandW, tipW, hitPos, NULL, NULL);
+        int hit = pdphysRaycastAnyRoom(s_vrBladeHiltW, s_vrBladeTipW, hitPos, NULL, NULL);
+        if (!hit && dbl) {
+            hit = pdphysRaycastAnyRoom(s_vrBladeHiltW, s_vrBladeBackW, hitPos, NULL, NULL);
         }
         if (hit && s_wallSparkCd <= 0.0f) {
             lnAddSpark(hitPos, 0xFF9838FFu, 15.0f, 0.14f);
@@ -1758,8 +1647,8 @@ void gevrLnGameTick(s32 ticks60)
     const int allowForce = (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && VrLaserswordForcePowers != 0)
         || (VrLaserswordNinjaMode == GEVR_LN_NINJA && !lnHasNinjaShield());
     const int useLightning = (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD && gevrLnSelectedPower == GEVR_LN_FORCE_LIGHTNING);
-    const float *forceOrigin = (g_gevrStereo && s_vrForceValid) ? forceHandW : eye;
-    const float *forceAim = (g_gevrStereo && s_vrForceValid) ? forceDirW : fwd;
+    const float *forceOrigin = s_vrForceValid ? forceHandW : eye;
+    const float *forceAim = s_vrForceValid ? forceDirW : fwd;
 
     s_lightningActive = 0;
     s_lightningCount = 0;
@@ -1835,7 +1724,7 @@ void gevrLnGameTick(s32 ticks60)
                     s_chokeChr->damage += dt * 1.4f;
 
                     /* VR Force Slam downward gesture while choking */
-                    if (g_gevrStereo && VrLaserswordForcePowers && fVelCm[1] < -200.0f && s_chokeHoldSec > 0.15f) {
+                    if (VrLaserswordForcePowers && fVelCm[1] < -200.0f && s_chokeHoldSec > 0.15f) {
                         const float slamDir[3] = { 0.0f, -1.0f, 0.0f };
                         const float slamVel[3] = { 0.0f, -900.0f, 0.0f };
                         memcpy(s_thrownBodyStart, s_chokeChr->prop->pos.f, sizeof(s_thrownBodyStart));
@@ -1931,7 +1820,7 @@ void gevrLnGameTick(s32 ticks60)
         if (offRelease) {
             if (s_chokeActive && lnChrAliveValid(s_chokeChr, s_chokeChrnum)) {
                 float launchDir[3] = { forceAim[0], forceAim[1], forceAim[2] };
-                if (g_gevrStereo && sqrtf(lnDot3(fVelCm, fVelCm)) > 240.0f) {
+                if (sqrtf(lnDot3(fVelCm, fVelCm)) > 240.0f) {
                     lnNorm3(fVelCm, launchDir);
                 }
                 const float throwVel[3] = { launchDir[0] * 1600.0f, launchDir[1] * 1600.0f + 160.0f, launchDir[2] * 1600.0f };
@@ -1951,7 +1840,7 @@ void gevrLnGameTick(s32 ticks60)
                 lnHaptic(fCtrl, 0.9f, 0.10f);
             } else if (s_grabBodySlot >= 0) {
                 float launchDir[3] = { forceAim[0], forceAim[1], forceAim[2] };
-                if (g_gevrStereo && sqrtf(lnDot3(fVelCm, fVelCm)) > 240.0f) {
+                if (sqrtf(lnDot3(fVelCm, fVelCm)) > 240.0f) {
                     lnNorm3(fVelCm, launchDir);
                 }
                 const float throwVel[3] = { launchDir[0] * 1600.0f, launchDir[1] * 1600.0f + 180.0f, launchDir[2] * 1600.0f };
@@ -2064,9 +1953,8 @@ void gevrLnGameTick(s32 ticks60)
         }
     }
 
-    /* Update procedural DSP audio state */
-    const float slashAudio = (s_slash.active || s_offSlash.active) ? 0.85f : 0.0f;
-    s_swingAudio01 = fmaxf(vrSwing01, slashAudio);
+    /* Update pack clip audio mixer state */
+    s_swingAudio01 = vrSwing01;
     if (VrLnAudio) {
         gevrLnAudioSetState(1, VrLaserswordNinjaMode == GEVR_LN_LASERSWORD, s_fpIgnite.extend, s_swingAudio01,
                             (s_chokeActive || s_grabBodySlot >= 0 || s_limbBallSuspended || s_caughtProjIdx >= 0) ? 1 : 0,
@@ -2088,20 +1976,21 @@ s32 gevrLnInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
     float eye[3], right[3], up[3], fwd[3];
     lnGetPlayerCameraWorld(eye, right, up, fwd);
 
-    /* Ninja bullet-slice mid-swing (flat animation OR fast VR tracked blade swing) */
-    const int vrSwinging = g_gevrStereo && s_vrBladeValid && s_vrWhooshCd[0] > 0.05f;
-    if (VrLaserswordNinjaMode == GEVR_LN_NINJA && VrNinjaBulletSlice
-        && (s_slash.active || s_offSlash.active || vrSwinging)) {
+    /* Ninja bullet-slice mid-swing during fast VR tracked blade swing */
+    const int vrSwinging = s_vrBladeValid && s_vrWhooshCd[0] > 0.05f;
+    if (VrLaserswordNinjaMode == GEVR_LN_NINJA && VrNinjaBulletSlice && vrSwinging) {
         const float cutPt[3] = {
-            (g_gevrStereo && s_vrBladeValid) ? (s_vrBladeHiltW[0] + s_vrBladeTipW[0]) * 0.5f : (eye[0] + fwd[0] * 55.0f),
-            (g_gevrStereo && s_vrBladeValid) ? (s_vrBladeHiltW[1] + s_vrBladeTipW[1]) * 0.5f : (eye[1] + fwd[1] * 55.0f),
-            (g_gevrStereo && s_vrBladeValid) ? (s_vrBladeHiltW[2] + s_vrBladeTipW[2]) * 0.5f : (eye[2] + fwd[2] * 55.0f)
+            (s_vrBladeHiltW[0] + s_vrBladeTipW[0]) * 0.5f,
+            (s_vrBladeHiltW[1] + s_vrBladeTipW[1]) * 0.5f,
+            (s_vrBladeHiltW[2] + s_vrBladeTipW[2]) * 0.5f
         };
         lnAddSpark(cutPt, 0xF0F8FFFFu, 26.0f, 0.18f);
         lnSfx(GEVR_LN_SFX_CLASH_METAL, 1.15f);
         lnHaptic(VrLaserswordHand ? 0 : 1, 0.7f, 0.06f);
         return 1;
     }
+
+    if (!s_vrBladeValid && !s_vrForceValid) return 0;
 
     /* GoldenEye record_damage_kills passes bullet travel vector (shooter -> player);
      * negate to obtain direction from player toward the shooter. */
@@ -2114,32 +2003,24 @@ s32 gevrLnInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
     }
 
     float reflectDir[3] = { 0.0f, 0.0f, 0.0f };
-    int res;
-    if (g_gevrStereo && (s_vrBladeValid || s_vrForceValid)) {
-        const float *bDir = s_vrBladeValid ? s_vrBladeDirW : fwd;
-        const float *handAim = s_ninjaShieldHeld
-            ? (s_vrForceValid ? s_vrForceAimW : fwd)
-            : (s_vrBladeValid ? s_vrBladeAimW : fwd);
-        res = gevrLnCheckVrBladeBlock(VrLaserswordNinjaMode, s_blocking || s_ninjaShieldHeld,
-                                      s_ninjaShieldHeld, fwd, bDir, handAim, toShooter, reflectDir);
-    } else {
-        res = gevrLnCheckBlock(VrLaserswordNinjaMode, s_blocking || s_ninjaShieldHeld,
-                               s_ninjaShieldHeld, fwd, toShooter, reflectDir);
-    }
+    const float *bDir = s_vrBladeValid ? s_vrBladeDirW : fwd;
+    const float *handAim = s_ninjaShieldHeld
+        ? (s_vrForceValid ? s_vrForceAimW : fwd)
+        : (s_vrBladeValid ? s_vrBladeAimW : fwd);
+    const int res = gevrLnCheckVrBladeBlock(VrLaserswordNinjaMode, s_blocking || s_ninjaShieldHeld,
+                                            s_ninjaShieldHeld, fwd, bDir, handAim, toShooter, reflectDir);
     if (res == GEVR_LN_BLOCK_NONE) return 0;
 
     const int perfect = (VrLnPerfectParry != 0 && s_blockHoldSec <= 0.22f && res == GEVR_LN_BLOCK_DEFLECT);
     float bladePt[3];
-    if (g_gevrStereo && s_ninjaShieldHeld && s_vrForceValid) {
+    if (s_ninjaShieldHeld && s_vrForceValid) {
         memcpy(bladePt, s_vrForcePosW, sizeof(bladePt));
-    } else if (g_gevrStereo && s_vrBladeValid) {
+    } else if (s_vrBladeValid) {
         bladePt[0] = s_vrBladeHiltW[0] + s_vrBladeDirW[0] * 55.0f;
         bladePt[1] = s_vrBladeHiltW[1] + s_vrBladeDirW[1] * 55.0f;
         bladePt[2] = s_vrBladeHiltW[2] + s_vrBladeDirW[2] * 55.0f;
     } else {
-        bladePt[0] = eye[0] + fwd[0] * 48.0f + right[0] * (s_ninjaShieldHeld ? -10.0f : 6.0f);
-        bladePt[1] = eye[1] + fwd[1] * 48.0f - up[1] * 6.0f;
-        bladePt[2] = eye[2] + fwd[2] * 48.0f + right[2] * (s_ninjaShieldHeld ? -10.0f : 6.0f);
+        memcpy(bladePt, s_vrForcePosW, sizeof(bladePt));
     }
 
     unsigned int core = 0xFFFFFFFFu, glow = 0xFFD860FFu;
@@ -2153,7 +2034,7 @@ s32 gevrLnInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
 
     if (res == GEVR_LN_BLOCK_DEFLECT) {
         ChrRecord *shooter = lnFindForceTarget(bladePt, reflectDir, 2200.0f, 0.70f);
-        if (!shooter && g_gevrStereo) {
+        if (!shooter) {
             shooter = lnFindForceTarget(eye, fwd, 2200.0f, 0.70f);
         }
         if (shooter) {
@@ -2202,16 +2083,6 @@ static void lnSetVtx(Vtx *v, f32 x, f32 y, f32 z, u32 rgba)
     v->v.cn[3] = rgba & 0xff;
 }
 
-static u32 lnShadeRgba(u32 rgba, float mul)
-{
-    if (mul < 0.40f) mul = 0.40f;
-    if (mul > 1.0f) mul = 1.0f;
-    const unsigned int r = (unsigned int)((float)((rgba >> 24) & 0xff) * mul);
-    const unsigned int g = (unsigned int)((float)((rgba >> 16) & 0xff) * mul);
-    const unsigned int b = (unsigned int)((float)((rgba >> 8) & 0xff) * mul);
-    return (r << 24) | (g << 16) | (b << 8) | (rgba & 0xffu);
-}
-
 static Gfx *lnBeginGeom(Gfx *gdl, const float originView[3], float scale, int translucent)
 {
     Mtxf mf;
@@ -2239,182 +2110,176 @@ static Gfx *lnBeginGeom(Gfx *gdl, const float originView[3], float scale, int tr
     return gdl;
 }
 
-static void lnOrthoFrame(const float dir[3], float uOut[3], float vOut[3])
+static void lnBuildBasis(const float tipDir[3], const float refRight[3], float bx[3], float by[3], float bz[3])
 {
-    const float ref[3] = { fabsf(dir[1]) < 0.9f ? 0.0f : 1.0f, fabsf(dir[1]) < 0.9f ? 1.0f : 0.0f, 0.0f };
-    lnCross3(dir, ref, uOut);
-    lnNorm3(uOut, uOut);
-    lnCross3(dir, uOut, vOut);
-    lnNorm3(vOut, vOut);
+    lnNorm3(tipDir, by);
+    float rx[3] = { 1.0f, 0.0f, 0.0f };
+    if (refRight && lnDot3(refRight, refRight) > 0.01f) lnNorm3(refRight, rx);
+    if (fabsf(lnDot3(rx, by)) > 0.94f) {
+        rx[0] = fabsf(by[0]) < 0.9f ? 1.0f : 0.0f;
+        rx[1] = 0.0f;
+        rx[2] = fabsf(by[0]) < 0.9f ? 0.0f : 1.0f;
+    }
+    lnCross3(rx, by, bz);
+    lnNorm3(bz, bz);
+    lnCross3(by, bz, bx);
+    lnNorm3(bx, bx);
 }
 
-/* 6-sided smoothly shaded cylindrical prism from origin along dir*lenMm (mm local) */
-static Gfx *lnEmitPrism(Gfx *gdl, const float aMm[3], const float dir[3], float lenMm,
-                        float r0Mm, float r1Mm, u32 rgbaBase, u32 rgbaTip, int emissive)
+static Gfx *lnEmitBladePass(Gfx *gdl, const float aMm[3], const float dir[3], float lenMm,
+                            float r0Mm, float r1Mm, u32 rgbaBase, u32 rgbaTip)
 {
     Vtx *v = dynAllocateVertices(12);
     if (!v) return gdl;
-    float u[3], w[3];
-    lnOrthoFrame(dir, u, w);
-    const float bMm[3] = {
-        aMm[0] + dir[0] * lenMm,
-        aMm[1] + dir[1] * lenMm,
-        aMm[2] + dir[2] * lenMm
-    };
+    float u[3], f[3], w[3];
+    lnBuildBasis(dir, NULL, u, f, w);
+    const float bMm[3] = { aMm[0] + f[0] * lenMm, aMm[1] + f[1] * lenMm, aMm[2] + f[2] * lenMm };
     for (int i = 0; i < 6; i++) {
         const float theta = (float)i * (6.2831853f / 6.0f);
         const float ca = cosf(theta), sa = sinf(theta);
         const float nx = u[0] * ca + w[0] * sa;
         const float ny = u[1] * ca + w[1] * sa;
         const float nz = u[2] * ca + w[2] * sa;
-        const float ldot = emissive ? 1.0f : (0.72f + 0.28f * (ny * 0.75f + nx * 0.45f - nz * 0.25f));
-        const u32 c0 = emissive ? rgbaBase : lnShadeRgba(rgbaBase, ldot);
-        const u32 c1 = emissive ? rgbaTip : lnShadeRgba(rgbaTip, ldot);
-        lnSetVtx(&v[i], aMm[0] + nx * r0Mm, aMm[1] + ny * r0Mm, aMm[2] + nz * r0Mm, c0);
-        lnSetVtx(&v[6 + i], bMm[0] + nx * r1Mm, bMm[1] + ny * r1Mm, bMm[2] + nz * r1Mm, c1);
+        lnSetVtx(&v[i], aMm[0] + nx * r0Mm, aMm[1] + ny * r0Mm, aMm[2] + nz * r0Mm, rgbaBase);
+        lnSetVtx(&v[6 + i], bMm[0] + nx * r1Mm, bMm[1] + ny * r1Mm, bMm[2] + nz * r1Mm, rgbaTip);
     }
     gSPVertex(gdl++, osVirtualToPhysical(v), 12, 0);
     for (int i = 0; i < 6; i++) {
-        int j = (i + 1) % 6;
+        const int j = (i + 1) % 6;
         gSP2Triangles(gdl++, i, j, 6 + j, 0, i, 6 + j, 6 + i, 0);
     }
     return gdl;
 }
 
-static Gfx *lnDrawLaserswordExView(Gfx *gdl, const float hiltView[3], const float dirView[3],
+static Gfx *lnDrawPackMesh(Gfx *gdl, const GevrLnMesh *mesh, const float bx[3], const float by[3], const float bz[3],
+                           float katanaLenCm, int goldTint)
+{
+    if (!mesh || !mesh->verts || mesh->triCount <= 0) return gdl;
+    const float bladeScale = (katanaLenCm > 0.0f) ? fmaxf(0.25f, (katanaLenCm - 24.0f) / (105.0f - 24.0f)) : 1.0f;
+    for (int t0 = 0; t0 < mesh->triCount; t0 += 10) {
+        const int batch = (mesh->triCount - t0 > 10) ? 10 : (mesh->triCount - t0);
+        Vtx *v = dynAllocateVertices(batch * 3);
+        if (!v) return gdl;
+        for (int k = 0; k < batch * 3; k++) {
+            const GevrLnVtx *s = &mesh->verts[t0 * 3 + k];
+            const float py = (katanaLenCm > 0.0f && s->p[1] > 24.0f)
+                ? (24.0f + (s->p[1] - 24.0f) * bladeScale) : s->p[1];
+            unsigned int r = s->rgba[0], g = s->rgba[1], b = s->rgba[2], a = s->rgba[3];
+            if (goldTint && r > 70u && b > 70u) {
+                r = (r * 290u) / 255u;
+                if (r > 255u) r = 255u;
+                g = (g * 225u) / 255u;
+                b = b / 4u;
+            }
+            const u32 col = (r << 24) | (g << 16) | (b << 8) | a;
+            lnSetVtx(&v[k],
+                     (s->p[0] * bx[0] + py * by[0] + s->p[2] * bz[0]) * 10.0f,
+                     (s->p[0] * bx[1] + py * by[1] + s->p[2] * bz[1]) * 10.0f,
+                     (s->p[0] * bx[2] + py * by[2] + s->p[2] * bz[2]) * 10.0f, col);
+        }
+        gSPVertex(gdl++, osVirtualToPhysical(v), batch * 3, 0);
+        for (int t = 0; t + 1 < batch; t += 2) {
+            const int a = t * 3, b = a + 3;
+            gSP2Triangles(gdl++, a, a + 1, a + 2, 0, b, b + 1, b + 2, 0);
+        }
+        if (batch & 1) {
+            const int a = (batch - 1) * 3;
+            gSP1Triangle(gdl++, a, a + 1, a + 2, 0);
+        }
+    }
+    return gdl;
+}
+
+static Gfx *lnDrawLaserswordExView(Gfx *gdl, const float hiltView[3], const float dirView[3], const float refRight[3],
                                    float lenCm, float extend01, int colorIdx, float scale, int doubleEnded)
 {
+    const GevrLnPack *pk = gevrLnPackGet();
+    if (!pk) return gdl;
+    const GevrLnMesh *hm = &pk->meshes[doubleEnded ? GEVR_LN_MESH_HILT_DOUBLE : GEVR_LN_MESH_HILT_SINGLE];
     unsigned int core = 0xFFFFFFFFu, glow = 0x2890FFE8u;
     gevrLnLaserswordPalette(colorIdx, &core, &glow);
-    const float hiltMm = doubleEnded ? 320.0f : 240.0f;
-    const float backOff = doubleEnded ? -160.0f : 0.0f;
-    const float fwdOff = doubleEnded ? 160.0f : 240.0f;
-    const float hiltStart[3] = { dirView[0] * backOff, dirView[1] * backOff, dirView[2] * backOff };
-    const float emitter[3] = { dirView[0] * fwdOff, dirView[1] * fwdOff, dirView[2] * fwdOff };
-    const float backEmitter[3] = { -dirView[0] * 160.0f, -dirView[1] * 160.0f, -dirView[2] * 160.0f };
-    const float negDir[3] = { -dirView[0], -dirView[1], -dirView[2] };
+
+    float bx[3], by[3], bz[3];
+    lnBuildBasis(dirView, refRight, bx, by, bz);
 
     Gfx *beg = lnBeginGeom(gdl, hiltView, scale, 0);
     if (!beg) return gdl;
-    gdl = beg;
-    gdl = lnEmitPrism(gdl, hiltStart, dirView, hiltMm, 17.0f, 15.0f, 0x282A30FFu, 0x808894FFu, 0);
+    gdl = lnDrawPackMesh(beg, hm, bx, by, bz, 0.0f, 0);
+
     if (extend01 > 0.02f) {
-        const float bladeMm = (lenCm * 10.0f - 240.0f) * extend01;
-        gdl = lnEmitPrism(gdl, emitter, dirView, bladeMm, 11.0f, 6.0f, core, core, 1);
+        const float emMm = hm->emitterOffsetCm * 10.0f;
+        const float rMm = (hm->bladeRadiusCm > 0.1f ? hm->bladeRadiusCm : 2.5f) * 10.0f;
+        const float emitter[3] = { by[0] * emMm, by[1] * emMm, by[2] * emMm };
+        const float backEmitter[3] = { -by[0] * emMm, -by[1] * emMm, -by[2] * emMm };
+        const float negBy[3] = { -by[0], -by[1], -by[2] };
+        const float bladeMm = fmaxf(0.0f, lenCm * 10.0f - emMm) * extend01;
+
+        gdl = lnEmitBladePass(gdl, emitter, by, bladeMm, rMm * 0.45f, rMm * 0.25f, core, core);
         if (doubleEnded) {
-            gdl = lnEmitPrism(gdl, backEmitter, negDir, bladeMm * 0.92f, 11.0f, 6.0f, core, core, 1);
+            gdl = lnEmitBladePass(gdl, backEmitter, negBy, bladeMm * 0.92f, rMm * 0.45f, rMm * 0.25f, core, core);
         }
         beg = lnBeginGeom(gdl, hiltView, scale, 1);
         if (beg) {
-            gdl = beg;
             const float pulse = 1.0f + 0.08f * sinf(s_time * 38.0f);
-            gdl = lnEmitPrism(gdl, emitter, dirView, bladeMm + 25.0f, 25.0f * pulse, 14.0f * pulse, glow, glow & 0xFFFFFF90u, 1);
+            gdl = lnEmitBladePass(beg, emitter, by, bladeMm + 25.0f,
+                                  rMm * pulse, rMm * 0.56f * pulse, glow, glow & 0xFFFFFF90u);
             if (doubleEnded) {
-                gdl = lnEmitPrism(gdl, backEmitter, negDir, bladeMm * 0.92f + 25.0f,
-                                  25.0f * pulse, 14.0f * pulse, glow, glow & 0xFFFFFF90u, 1);
+                gdl = lnEmitBladePass(gdl, backEmitter, negBy, bladeMm * 0.92f + 25.0f,
+                                      rMm * pulse, rMm * 0.56f * pulse, glow, glow & 0xFFFFFF90u);
             }
         }
     }
     return gdl;
 }
 
-static Gfx *lnDrawLaserswordView(Gfx *gdl, const float hiltView[3], const float dirView[3],
+static Gfx *lnDrawLaserswordView(Gfx *gdl, const float hiltView[3], const float dirView[3], const float refRight[3],
                                  float lenCm, float extend01, int colorIdx, float scale)
 {
-    return lnDrawLaserswordExView(gdl, hiltView, dirView, lenCm, extend01, colorIdx, scale, 0);
+    return lnDrawLaserswordExView(gdl, hiltView, dirView, refRight, lenCm, extend01, colorIdx, scale, 0);
 }
 
-static Gfx *lnDrawKatanaView(Gfx *gdl, const float hiltView[3], const float dirView[3],
+static Gfx *lnDrawKatanaView(Gfx *gdl, const float hiltView[3], const float dirView[3], const float refRight[3],
                              float lenCm, int isGold, float scale)
 {
-    const float hiltMm = 220.0f;
-    const float bladeMm = fmaxf(280.0f, lenCm * 10.0f - hiltMm);
-    const float zero[3] = { 0, 0, 0 };
+    const GevrLnPack *pk = gevrLnPackGet();
+    if (!pk) return gdl;
+    const GevrLnMesh *km = &pk->meshes[isGold ? GEVR_LN_MESH_KATANA_GOLD : GEVR_LN_MESH_KATANA_SILVER];
+    float bx[3], by[3], bz[3];
+    lnBuildBasis(dirView, refRight, bx, by, bz);
     Gfx *beg = lnBeginGeom(gdl, hiltView, scale, 0);
     if (!beg) return gdl;
-    gdl = beg;
-    gdl = lnEmitPrism(gdl, zero, dirView, hiltMm, 15.0f, 14.0f, 0x1E2028FFu, 0x363A44FFu, 0);
-    const float tsuba[3] = { dirView[0] * hiltMm, dirView[1] * hiltMm, dirView[2] * hiltMm };
-    gdl = lnEmitPrism(gdl, tsuba, dirView, 18.0f, 36.0f, 34.0f, isGold ? 0xFFD230FFu : 0xC0A040FFu, 0x705820FFu, 0);
-    const float bladeBase[3] = { dirView[0] * (hiltMm + 18.0f), dirView[1] * (hiltMm + 18.0f), dirView[2] * (hiltMm + 18.0f) };
-    const u32 c0 = isGold ? 0xFFE252FFu : 0xD4DCE6FFu;
-    const u32 c1 = isGold ? 0xFFF4A8FFu : 0xF8FCFFFFu;
-    return lnEmitPrism(gdl, bladeBase, dirView, bladeMm, 13.0f, 2.5f, c0, c1, 0);
+    return lnDrawPackMesh(beg, km, bx, by, bz, lenCm, 0);
 }
 
 static Gfx *lnDrawShieldView(Gfx *gdl, const float centerView[3], const float rightView[3],
                              const float upView[3], float scale)
 {
+    const GevrLnPack *pk = gevrLnPackGet();
+    if (!pk) return gdl;
+    float bx[3], by[3], bz[3];
+    lnNorm3(rightView, bx);
+    lnNorm3(upView, by);
+    lnCross3(bx, by, bz);
+    lnNorm3(bz, bz);
     Gfx *beg = lnBeginGeom(gdl, centerView, scale, 0);
     if (!beg) return gdl;
-    gdl = beg;
-    Vtx *v = dynAllocateVertices(17);
-    if (!v) return gdl;
-    lnSetVtx(&v[0], 0, 0, 0, 0x485260FFu);
-    for (int i = 0; i < 8; i++) {
-        const float a = (float)i * (6.2831853f / 8.0f);
-        const float ca = cosf(a), sa = sinf(a);
-        const float sh = 0.72f + 0.28f * sa;
-        lnSetVtx(&v[1 + i], (rightView[0] * ca + upView[0] * sa) * 145.0f,
-                 (rightView[1] * ca + upView[1] * sa) * 145.0f,
-                 (rightView[2] * ca + upView[2] * sa) * 145.0f, lnShadeRgba(0x363E4AFFu, sh));
-        lnSetVtx(&v[9 + i], (rightView[0] * ca + upView[0] * sa) * 180.0f,
-                 (rightView[1] * ca + upView[1] * sa) * 180.0f,
-                 (rightView[2] * ca + upView[2] * sa) * 180.0f, lnShadeRgba(0xE6B830FFu, sh));
-    }
-    gSPVertex(gdl++, osVirtualToPhysical(v), 17, 0);
-    for (int i = 0; i < 8; i++) {
-        int j = (i + 1) & 7;
-        gSP1Triangle(gdl++, 0, 1 + i, 1 + j, 0);
-        gSP2Triangles(gdl++, 1 + i, 9 + i, 9 + j, 0, 1 + i, 9 + j, 1 + j, 0);
-    }
-    return gdl;
+    return lnDrawPackMesh(beg, &pk->meshes[GEVR_LN_MESH_SHIELD], bx, by, bz, 0.0f, 0);
 }
 
 static Gfx *lnDrawBoomerangView(Gfx *gdl, const float centerView[3], float spinAngle,
                                 int variant, float scale)
 {
-    Gfx *beg = lnBeginGeom(gdl, centerView, scale, 0);
-    if (!beg) return gdl;
-    gdl = beg;
+    const GevrLnPack *pk = gevrLnPackGet();
+    if (!pk) return gdl;
     const int isGold = (variant == GEVR_LN_BOOM_GOLD_SHURIKEN || variant == GEVR_LN_BOOM_GOLD_WING);
     const int isWing = (variant == GEVR_LN_BOOM_WING || variant == GEVR_LN_BOOM_GOLD_WING);
-    const u32 cCenter = isGold ? 0x20242CFFu : 0x3A424EFFu;
-    const u32 cTip = isGold ? 0xFFD432FFu : 0xE8F0F8FFu;
-
-    if (isWing) {
-        Vtx *v = dynAllocateVertices(6);
-        if (!v) return gdl;
-        const float ca = cosf(spinAngle), sa = sinf(spinAngle);
-        const float p[6][2] = {
-            { 0, 0 }, { -170, 110 }, { -120, 145 },
-            { 35, 35 }, { 170, 110 }, { 120, 145 }
-        };
-        for (int i = 0; i < 6; i++) {
-            float x = p[i][0] * ca - p[i][1] * sa;
-            float z = p[i][0] * sa + p[i][1] * ca;
-            lnSetVtx(&v[i], x, 0.0f, z, (i == 0 || i == 3) ? cCenter : cTip);
-        }
-        gSPVertex(gdl++, osVirtualToPhysical(v), 6, 0);
-        gSP2Triangles(gdl++, 0, 1, 2, 0, 0, 2, 3, 0);
-        gSP2Triangles(gdl++, 0, 3, 5, 0, 0, 5, 4, 0);
-        return gdl;
-    }
-
-    Vtx *v = dynAllocateVertices(9);
-    if (!v) return gdl;
-    lnSetVtx(&v[0], 0, 0, 0, cCenter);
-    for (int i = 0; i < 4; i++) {
-        const float a = spinAngle + (float)i * 1.5707963f;
-        const float ca = cosf(a), sa = sinf(a);
-        lnSetVtx(&v[1 + i * 2], ca * 175.0f, 0.0f, sa * 175.0f, cTip);
-        lnSetVtx(&v[2 + i * 2], cosf(a + 0.55f) * 55.0f, 0.0f, sinf(a + 0.55f) * 55.0f, cCenter);
-    }
-    gSPVertex(gdl++, osVirtualToPhysical(v), 9, 0);
-    for (int i = 0; i < 4; i++) {
-        gSP1Triangle(gdl++, 0, 1 + i * 2, 2 + i * 2, 0);
-    }
-    return gdl;
+    const float ca = cosf(spinAngle), sa = sinf(spinAngle);
+    const float bx[3] = { ca, 0.0f, sa };
+    const float by[3] = { 0.0f, 1.0f, 0.0f };
+    const float bz[3] = { -sa, 0.0f, ca };
+    Gfx *beg = lnBeginGeom(gdl, centerView, scale, 0);
+    if (!beg) return gdl;
+    return lnDrawPackMesh(beg, &pk->meshes[isWing ? GEVR_LN_MESH_WING : GEVR_LN_MESH_SHURIKEN], bx, by, bz, 0.0f, isGold);
 }
 
 static Gfx *lnDrawSparkView(Gfx *gdl, const float centerView[3], float radiusCm, unsigned int rgba, float scale)
@@ -2542,7 +2407,7 @@ static Gfx *lnDrawSmokeView(Gfx *gdl, const float centerView[3], float radiusCm,
 
 Gfx *gevrLnDrawWorld(Gfx *gdl)
 {
-    if (!g_CurrentPlayer || !lnInGameplay()) return gdl;
+    if (!gevrIsQuestVrApk() || !g_gevrStereo || !gevrLnPackGet() || !g_CurrentPlayer || !lnInGameplay()) return gdl;
     const Mtxf *w2s = camGetWorldToScreenMtxf();
     if (!w2s) return gdl;
     const float s = lnViewScale();
@@ -2555,7 +2420,7 @@ Gfx *gevrLnDrawWorld(Gfx *gdl)
         if (pv[2] < -10.0f) {
             if (!s_thrown.isBoomerang) {
                 const float spin[3] = { cosf(s_thrown.spinAngle), 0.0f, sinf(s_thrown.spinAngle) };
-                gdl = lnDrawLaserswordExView(gdl, pv, spin, 105.0f, 1.0f, VrLaserswordColor, s,
+                gdl = lnDrawLaserswordExView(gdl, pv, spin, NULL, 105.0f, 1.0f, VrLaserswordColor, s,
                                              VrLaserswordStyle == GEVR_LN_STYLE_DOUBLE);
             } else {
                 gdl = lnDrawBoomerangView(gdl, pv, s_thrown.spinAngle, VrNinjaBoomerang, s);
@@ -2610,10 +2475,10 @@ Gfx *gevrLnDrawWorld(Gfx *gdl)
         float d[3] = { tv[0] - hv[0], tv[1] - hv[1], tv[2] - hv[2] };
         lnNorm3(d, d);
         if (sp->kind == LN_NPC_RIVAL || sp->kind == LN_NPC_ALLY_LASERSWORD) {
-            gdl = lnDrawLaserswordExView(gdl, hv, d, 110.0f * sp->scale, sp->ignite.extend, sp->color, s,
+            gdl = lnDrawLaserswordExView(gdl, hv, d, NULL, 110.0f * sp->scale, sp->ignite.extend, sp->color, s,
                                          sp->kind == LN_NPC_RIVAL && sp->doubleBladed);
         } else {
-            gdl = lnDrawKatanaView(gdl, hv, d, 105.0f, 0, s);
+            gdl = lnDrawKatanaView(gdl, hv, d, NULL, 105.0f, 0, s);
         }
     }
 
@@ -2673,54 +2538,31 @@ Gfx *gevrLnDrawFirstPerson(Gfx *gdl)
     if (!lnModeActive() || lnUsingGunsOverride() || !lnInGameplay()) return gdl;
     const Mtxf *w2s = camGetWorldToScreenMtxf();
     const float s = lnViewScale();
-    const float sideSign = VrLaserswordHand ? -1.0f : 1.0f;
     const int bCtrl = VrLaserswordHand ? 0 : 1;
     const int fCtrl = 1 - bCtrl;
     Gfx *const startGdl = gdl;
 
-    float offHilt[3] = { -16.0f * sideSign * s, -10.0f * s, -30.0f * s };
-    float offDir[3] = { 0.22f * sideSign, 0.72f, -0.66f };
+    float offHilt[3] = { 0.0f, 0.0f, 0.0f };
+    float offDir[3] = { 0.0f, 1.0f, 0.0f };
     float offRight[3] = { 1.0f, 0.0f, 0.0f };
     float offUp[3] = { 0.0f, 1.0f, 0.0f };
-    int haveVrOff = 0;
-    if (g_gevrStereo) {
-        float ob[3];
-        if (gevrLnGetGripAxes(fCtrl, offHilt, offRight, offUp, ob)) {
-            offDir[0] = -ob[0] * 0.35f + offUp[0] * 0.94f;
-            offDir[1] = -ob[1] * 0.35f + offUp[1] * 0.94f;
-            offDir[2] = -ob[2] * 0.35f + offUp[2] * 0.94f;
-            lnNorm3(offDir, offDir);
-            haveVrOff = 1;
-        }
+    float ob[3] = { 0.0f, 0.0f, 1.0f };
+    const int haveVrOff = gevrLnGetGripAxes(fCtrl, offHilt, offRight, offUp, ob);
+    if (haveVrOff) {
+        offDir[0] = -ob[0] * 0.35f + offUp[0] * 0.94f;
+        offDir[1] = -ob[1] * 0.35f + offUp[1] * 0.94f;
+        offDir[2] = -ob[2] * 0.35f + offUp[2] * 0.94f;
+        lnNorm3(offDir, offDir);
     }
 
-    /* Weapon hand pose (VR tracked hand or Flat animated swing/block) */
+    /* Weapon hand pose (Quest VR tracked controllers only) */
     if (!s_thrown.active) {
-        float hilt[3], tipDir[3];
-        int haveVr = 0;
-        if (g_gevrStereo) {
-            float r[3], u[3], b[3];
-            if (gevrLnGetGripAxes(bCtrl, hilt, r, u, b)) {
-                tipDir[0] = -b[0] * 0.35f + u[0] * 0.94f;
-                tipDir[1] = -b[1] * 0.35f + u[1] * 0.94f;
-                tipDir[2] = -b[2] * 0.35f + u[2] * 0.94f;
-                lnNorm3(tipDir, tipDir);
-                haveVr = 1;
-            }
-        }
-        if (!haveVr) {
-            if (s_blocking) {
-                hilt[0] = -14.0f * sideSign * s; hilt[1] = -6.0f * s; hilt[2] = -34.0f * s;
-                tipDir[0] = 0.65f * sideSign; tipDir[1] = 0.72f; tipDir[2] = -0.22f;
-            } else if (s_slash.active) {
-                const float u = s_slash.duration > 0.0f ? s_slash.t / s_slash.duration : 0.0f;
-                const float swing = (s_slash.dir == 0 ? 1.0f - 2.0f * u : -1.0f + 2.0f * u) * sideSign;
-                hilt[0] = (14.0f * swing) * s; hilt[1] = (-10.0f - 4.0f * sinf(u * 3.14159f)) * s; hilt[2] = -36.0f * s;
-                tipDir[0] = -0.55f * swing; tipDir[1] = 0.35f - 0.5f * u; tipDir[2] = -0.75f;
-            } else {
-                hilt[0] = 17.0f * sideSign * s; hilt[1] = -14.0f * s; hilt[2] = -32.0f * s;
-                tipDir[0] = -0.22f * sideSign; tipDir[1] = 0.72f; tipDir[2] = -0.66f;
-            }
+        float hilt[3], tipDir[3], r[3], u[3], b[3];
+        const int haveVr = gevrLnGetGripAxes(bCtrl, hilt, r, u, b);
+        if (haveVr) {
+            tipDir[0] = -b[0] * 0.35f + u[0] * 0.94f;
+            tipDir[1] = -b[1] * 0.35f + u[1] * 0.94f;
+            tipDir[2] = -b[2] * 0.35f + u[2] * 0.94f;
             lnNorm3(tipDir, tipDir);
         }
 
@@ -2728,21 +2570,11 @@ Gfx *gevrLnDrawFirstPerson(Gfx *gdl)
             const int dbl = (VrLaserswordStyle == GEVR_LN_STYLE_DOUBLE);
             unsigned int core = 0xFFFFFFFFu, glow = 0x2890FFE8u;
             gevrLnLaserswordPalette(VrLaserswordColor, &core, &glow);
-            gdl = lnDrawLaserswordExView(gdl, hilt, tipDir, 115.0f, s_fpIgnite.extend, VrLaserswordColor, s, dbl);
-            if (VrLaserswordStyle == GEVR_LN_STYLE_DUAL) {
-                float ohilt[3] = {
-                    haveVrOff ? offHilt[0] : -17.0f * sideSign * s,
-                    haveVrOff ? offHilt[1] : -14.0f * s,
-                    haveVrOff ? offHilt[2] : -32.0f * s
-                };
-                float odir[3] = { offDir[0], offDir[1], offDir[2] };
-                if (!haveVrOff && s_offSlash.active) {
-                    const float u = s_offSlash.t / fmaxf(0.01f, s_offSlash.duration);
-                    odir[0] = -0.55f * sideSign * (1.0f - 2.0f * u);
-                    odir[2] = -0.78f;
-                }
-                lnNorm3(odir, odir);
-                gdl = lnDrawLaserswordView(gdl, ohilt, odir, 105.0f, s_fpIgnite.extend, VrLaserswordColor, s);
+            if (haveVr) {
+                gdl = lnDrawLaserswordExView(gdl, hilt, tipDir, r, 115.0f, s_fpIgnite.extend, VrLaserswordColor, s, dbl);
+            }
+            if (VrLaserswordStyle == GEVR_LN_STYLE_DUAL && haveVrOff) {
+                gdl = lnDrawLaserswordView(gdl, offHilt, offDir, offRight, 105.0f, s_fpIgnite.extend, VrLaserswordColor, s);
             }
             if (VrLnBladeTrails && w2s) {
                 gdl = lnDrawTrailWorld(gdl, w2s, &s_trails[0], glow, s);
@@ -2752,35 +2584,21 @@ Gfx *gevrLnDrawFirstPerson(Gfx *gdl)
         } else if (VrLaserswordNinjaMode == GEVR_LN_NINJA) {
             const int sw = lnEffectiveNinjaSword();
             const unsigned int nTrailRgba = gevrLnIsGoldSword(sw) ? 0xFFE058D8u : 0xD8ECFFD8u;
-            if (gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_BOOMERANG) {
-                const float bp[3] = { 16.0f * sideSign * s, -11.0f * s, -34.0f * s };
-                gdl = lnDrawBoomerangView(gdl, haveVr ? hilt : bp, s_time * 3.0f, VrNinjaBoomerang, s);
-            } else {
-                const float reachCm = gevrLnWeaponReachCm(GEVR_LN_NINJA, sw);
-                gdl = lnDrawKatanaView(gdl, hilt, tipDir, reachCm, gevrLnIsGoldSword(sw), s);
+            if (haveVr) {
+                if (gevrLnSelectedNinjaSlot == GEVR_LN_NINJA_SLOT_BOOMERANG) {
+                    gdl = lnDrawBoomerangView(gdl, hilt, s_time * 3.0f, VrNinjaBoomerang, s);
+                } else {
+                    const float reachCm = gevrLnWeaponReachCm(GEVR_LN_NINJA, sw);
+                    gdl = lnDrawKatanaView(gdl, hilt, tipDir, r, reachCm, gevrLnIsGoldSword(sw), s);
+                }
             }
             /* Off-hand dual short sword or Ninja Shield */
-            if (gevrLnIsDualSword(GEVR_LN_NINJA, sw)) {
-                float ohilt[3] = {
-                    haveVrOff ? offHilt[0] : -17.0f * sideSign * s,
-                    haveVrOff ? offHilt[1] : -14.0f * s,
-                    haveVrOff ? offHilt[2] : -32.0f * s
-                };
-                float odir[3] = { offDir[0], offDir[1], offDir[2] };
-                if (!haveVrOff && s_offSlash.active) {
-                    const float u = s_offSlash.t / fmaxf(0.01f, s_offSlash.duration);
-                    odir[0] = -0.5f * sideSign * (1.0f - 2.0f * u);
-                    odir[2] = -0.8f;
+            if (haveVrOff) {
+                if (gevrLnIsDualSword(GEVR_LN_NINJA, sw)) {
+                    gdl = lnDrawKatanaView(gdl, offHilt, offDir, offRight, 70.0f, gevrLnIsGoldSword(sw), s);
+                } else if (lnHasNinjaShield()) {
+                    gdl = lnDrawShieldView(gdl, offHilt, offRight, offUp, s);
                 }
-                lnNorm3(odir, odir);
-                gdl = lnDrawKatanaView(gdl, ohilt, odir, 70.0f, gevrLnIsGoldSword(sw), s);
-            } else if (lnHasNinjaShield()) {
-                float sc[3] = {
-                    haveVrOff ? offHilt[0] : (s_ninjaShieldHeld ? -4.0f * sideSign * s : -18.0f * sideSign * s),
-                    haveVrOff ? offHilt[1] : (s_ninjaShieldHeld ? -2.0f * s : -11.0f * s),
-                    haveVrOff ? offHilt[2] : (s_ninjaShieldHeld ? -36.0f * s : -30.0f * s)
-                };
-                gdl = lnDrawShieldView(gdl, sc, offRight, offUp, s);
             }
             if (VrLnBladeTrails && w2s) {
                 gdl = lnDrawTrailWorld(gdl, w2s, &s_trails[0], nTrailRgba, s);
@@ -2790,7 +2608,7 @@ Gfx *gevrLnDrawFirstPerson(Gfx *gdl)
     }
 
     /* Off-hand Force Lightning arcs */
-    if (s_lightningActive && w2s) {
+    if (haveVrOff && s_lightningActive && w2s) {
         for (int i = 0; i < s_lightningCount; i++) {
             if (!lnChrAliveValid(s_lightningChrs[i], s_lightningChrnums[i])) continue;
             const float tgtW[3] = {
@@ -2805,7 +2623,7 @@ Gfx *gevrLnDrawFirstPerson(Gfx *gdl)
     }
 
     /* Force Choke tether line */
-    if (s_chokeActive && w2s && lnChrAliveValid(s_chokeChr, s_chokeChrnum)) {
+    if (haveVrOff && s_chokeActive && w2s && lnChrAliveValid(s_chokeChr, s_chokeChrnum)) {
         const float tgtW[3] = {
             s_chokeChr->prop->pos.x,
             s_chokeChr->prop->pos.y + 125.0f,

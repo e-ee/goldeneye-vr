@@ -72,6 +72,7 @@ final class ModManager {
         String[] files = { ".png" };
         int least = 100;
         boolean mod;
+        boolean questVrOnly;
         volatile Build latest;
 
         Pack(String id, String title, String by, String site, String version, String url, long size,
@@ -95,6 +96,14 @@ final class ModManager {
             p.files = files;
             p.least = files.length;
             p.mod = true;
+            return p;
+        }
+
+        /** A mod offered only in the Quest VR APK (excluded from mobile/frame/desktop builds). */
+        static Pack modQuestVr(String id, String title, String by, String version, String url, long size,
+                               String repo, String tagPrefix, String assetPrefix, String assetSuffix, String... files) {
+            Pack p = mod(id, title, by, version, url, size, repo, tagPrefix, assetPrefix, assetSuffix, files);
+            p.questVrOnly = true;
             return p;
         }
 
@@ -143,11 +152,19 @@ final class ModManager {
         Pack.mod("oddjob-hat", "Oddjob's hat", "Eurocom / EA (007 Nightfire), GoldenEye VR", "1.1",
                 "https://github.com/MrSco/goldeneye-vr-mods/releases/download/oddjob-hat-1.1/oddjob-hat-1.1.zip",
                 16626L, "MrSco/goldeneye-vr-mods", "oddjob-hat-", "oddjob-hat-", ".zip", "oddjob_hat.bin"),
-        // Mods: Lasersword melee weapon (port/src/gevr_lasersword.c, tools/gevr_lasersword_pack.py)
-        Pack.mod("lasersword", "Lasersword", "GoldenEye VR community", "1.0",
+        // Mods: Lasersword melee weapon (port/src/gevr_lasersword.c, tools/gevr_lasersword_pack.py), Quest VR APK only
+        Pack.modQuestVr("lasersword", "Lasersword", "GoldenEye VR community", "1.0",
                 "https://github.com/e-ee/goldeneye-vr-mods/releases/download/lasersword-1.0/lasersword-1.0.zip",
                 80580L, "e-ee/goldeneye-vr-mods", "lasersword-", "lasersword-", ".zip", "lasersword.bin"),
+        // Mods: Lasersword & Ninja modes (port/src/gevr_lasersword_ninja.c, tools/gevr_lasersword_ninja_pack.py), Quest VR APK only
+        Pack.modQuestVr("lasersword-ninja", "Lasersword & Ninja", "GoldenEye VR community", "1.0",
+                "https://github.com/e-ee/goldeneye-vr-mods/releases/download/lsninja-1.0/lsninja-1.0.zip",
+                219013L, "e-ee/goldeneye-vr-mods", "lsninja-", "lsninja-", ".zip", "lasersword_ninja.bin"),
     };
+
+    static boolean isQuestVrApk() {
+        return "quest".equals(BuildConfig.FLAVOR);
+    }
 
     // Per-pack states the launcher shows (vr_launcher.cpp keeps the same names).
     static final String NONE = "none";
@@ -222,6 +239,7 @@ final class ModManager {
     String status() {
         StringBuilder sb = new StringBuilder();
         for (Pack p : PACKS) {
+            if (p.questVrOnly && !isQuestVrApk()) continue;
             String state;
             String msg = "";
             int pr = -1;
@@ -276,7 +294,7 @@ final class ModManager {
         int colon = cmd.indexOf(':');
         if (colon < 0) return;
         final Pack p = find(cmd.substring(colon + 1));
-        if (p == null || busyId != null) return;
+        if (p == null || busyId != null || (p.questVrOnly && !isQuestVrApk())) return;
         final String verb = cmd.substring(0, colon);
         if (verb.equals("install") && !p.own()) {
             errorId = null;
@@ -474,7 +492,7 @@ final class ModManager {
     /** Each followed pack's latest GitHub release and its file; a failure only logs. */
     private void checkLatest() {
         for (Pack p : PACKS) {
-            if (p.repo == null) continue;
+            if (p.repo == null || (p.questVrOnly && !isQuestVrApk())) continue;
             try {
                 JSONObject o = null;
                 if (p.mod) {

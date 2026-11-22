@@ -3,12 +3,22 @@
 
 #include <math.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
-#define GEVR_LN_HOLD_SEC       0.22f
-#define GEVR_LN_DOUBLETAP_SEC  0.28f
-#define GEVR_LN_SLASH_SEC      0.26f
-#define GEVR_LN_BLOCK_COS      0.42f   /* ~65 deg half-cone */
+#define GEVR_LN_SFX_VOICES     6
+#define GEVR_LN_MAX_TRIS_MESH  1024u
+#define GEVR_LN_MAX_CLIP_SMPS  88200u
+#define GEVR_LN_MAX_PACK_BYTES (4L * 1024L * 1024L)
+
+#ifdef __ANDROID__
+#define LN_DIR "/sdcard/Android/data/com.gevr.port/files/"
+#else
+#define LN_DIR ""
+#endif
 
 static float lnNormalize3(const float v[3], float out[3])
 {
@@ -88,72 +98,6 @@ float gevrLnRivalScaleFactor(int setting, unsigned int seed)
         default:
             return 1.0f;
     }
-}
-
-void gevrLnTriggerReset(GevrLnTrigger *t)
-{
-    GevrLsTrigger ls;
-    if (!t) return;
-    gevrLsTriggerReset(&ls);
-    t->down = ls.down;
-    t->heldSec = ls.heldSec;
-    t->holdFired = ls.holdFired;
-    t->tapTimer = ls.tapTimer;
-    t->pendingTap = ls.pendingTap;
-}
-
-int gevrLnTriggerUpdate(GevrLnTrigger *t, int pressed, float dt)
-{
-    GevrLsTrigger ls;
-    if (!t) return GEVR_LN_TRIG_NONE;
-    ls.down = t->down;
-    ls.heldSec = t->heldSec;
-    ls.holdFired = t->holdFired;
-    ls.tapTimer = t->tapTimer;
-    ls.pendingTap = t->pendingTap;
-    const int ev = gevrLsTriggerUpdate(&ls, pressed, dt);
-    t->down = ls.down;
-    t->heldSec = ls.heldSec;
-    t->holdFired = ls.holdFired;
-    t->tapTimer = ls.tapTimer;
-    t->pendingTap = ls.pendingTap;
-    return ev;
-}
-
-int gevrLnSlashStart(GevrLnSlash *s, int blocking)
-{
-    GevrLsSlash ls;
-    if (!s) return 0;
-    ls.nextSide = s->nextSide;
-    ls.active = s->active;
-    ls.dir = s->dir;
-    ls.t = s->t;
-    ls.duration = s->duration;
-    const int started = gevrLsSlashStart(&ls, blocking);
-    s->nextSide = ls.nextSide;
-    s->active = ls.active;
-    s->dir = ls.dir;
-    s->t = ls.t;
-    s->duration = ls.duration;
-    return started;
-}
-
-float gevrLnSlashStep(GevrLnSlash *s, float dt)
-{
-    GevrLsSlash ls;
-    if (!s) return -1.0f;
-    ls.nextSide = s->nextSide;
-    ls.active = s->active;
-    ls.dir = s->dir;
-    ls.t = s->t;
-    ls.duration = s->duration;
-    const float phase = gevrLsSlashStep(&ls, dt);
-    s->nextSide = ls.nextSide;
-    s->active = ls.active;
-    s->dir = ls.dir;
-    s->t = ls.t;
-    s->duration = ls.duration;
-    return phase;
 }
 
 int gevrLnVrWristThrow(const float handVelCmS[3], const float aimFwd[3], int releasedFromHold)
@@ -246,7 +190,7 @@ int gevrLnThrownStep(GevrLnThrown *th, const float ownerPos[3], int hitWall, flo
         return 0;
     }
 
-    float toOwner[3] = {
+    const float toOwner[3] = {
         ownerPos[0] - th->pos[0],
         ownerPos[1] - th->pos[1],
         ownerPos[2] - th->pos[2]
@@ -304,7 +248,6 @@ void gevrLnLimbOrbitPos(const float center[3], int slot, int count, float timeSe
     if (slot < 0) slot = 0;
     if (slot >= count) slot %= count;
 
-    /* Fibonacci sphere with slow temporal swirl */
     const float y = 1.0f - 2.0f * ((float)slot + 0.5f) / (float)count;
     const float rHoriz = sqrtf(fmaxf(0.0f, 1.0f - y * y));
     const float goldenAngle = 2.39996323f;
@@ -370,34 +313,6 @@ int gevrLnThrownBodyImpact(GevrLnThrownBody *tb, float travelCm, float *outKnock
     tb->speedCmS = vCmS;
     if (outKnockSpeedCmS) *outKnockSpeedCmS = vCmS;
     return outcome;
-}
-
-int gevrLnCheckBlock(int mode, int blocking, int hasNinjaShield,
-                     const float playerFwd[3], const float toShooterDir[3],
-                     float outReflectDir[3])
-{
-    float fwd[3], toShooter[3];
-    if (!blocking || !playerFwd || !toShooterDir) {
-        return GEVR_LN_BLOCK_NONE;
-    }
-    if (mode != GEVR_LN_LASERSWORD && mode != GEVR_LN_NINJA) {
-        return GEVR_LN_BLOCK_NONE;
-    }
-    if (lnNormalize3(playerFwd, fwd) <= 0.0f || lnNormalize3(toShooterDir, toShooter) <= 0.0f) {
-        return GEVR_LN_BLOCK_NONE;
-    }
-    if (lnDot3(fwd, toShooter) < GEVR_LN_BLOCK_COS) {
-        return GEVR_LN_BLOCK_NONE;
-    }
-    if (mode == GEVR_LN_LASERSWORD || hasNinjaShield) {
-        if (outReflectDir) {
-            outReflectDir[0] = toShooter[0];
-            outReflectDir[1] = toShooter[1];
-            outReflectDir[2] = toShooter[2];
-        }
-        return GEVR_LN_BLOCK_DEFLECT;
-    }
-    return GEVR_LN_BLOCK_ABSORB;
 }
 
 int gevrLnBulletTravelToShooter(const float bulletTravel[3], float outToShooter[3])
@@ -466,44 +381,169 @@ int gevrLnSegmentHitCylinder(const float segA[3], const float segB[3],
     return gevrLsSegmentHitCylinder(segA, segB, cylBase, cylRadius, cylHeight, outHitPt);
 }
 
-static int s_lnFlatRtDown;
-static int s_lnFlatLtDown;
-static int s_lnFlatIsMouse;
-
-void gevrLnInputFeedFlat(int rtDown, int ltDown, int isMouse)
-{
-    s_lnFlatRtDown = rtDown ? 1 : 0;
-    s_lnFlatLtDown = ltDown ? 1 : 0;
-    s_lnFlatIsMouse = isMouse ? 1 : 0;
-}
-
-void gevrLnInputReadFlat(int *rtDown, int *ltDown, int *isMouse)
-{
-    if (rtDown) *rtDown = s_lnFlatRtDown;
-    if (ltDown) *ltDown = s_lnFlatLtDown;
-    if (isMouse) *isMouse = s_lnFlatIsMouse;
-}
-
 void gevrLnReflectVec(const float v[3], const float n[3], float out[3])
 {
     gevrLsReflectVec(v, n, out);
 }
 
 /* -------------------------------------------------------------------------- */
-/* Procedural DSP Audio Synthesizer (Lasersword Hum, Doppler, Clashes, Force) */
+/* Downloadable Asset Pack Loader (GEVRLN1\0: 7 3D meshes + 12 PCM clips)     */
 /* -------------------------------------------------------------------------- */
 
-#define GEVR_LN_TAU        6.28318530718f
-#define GEVR_LN_SFX_VOICES 6
+static const char *const s_lnPackFiles[] = {
+    LN_DIR "mods/lasersword_ninja.bin",
+    LN_DIR "texture-packs/lasersword-ninja/lasersword_ninja.bin",
+};
+
+static GevrLnPack s_lnPack;
+static time_t s_lnNextStatSec;
+
+static uint32_t lnRdU32(const unsigned char *p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static float lnRdF32(const unsigned char *p)
+{
+    uint32_t u = lnRdU32(p);
+    float f = 0.0f;
+    memcpy(&f, &u, 4);
+    return f;
+}
+
+static void lnFreePack(GevrLnPack *pk)
+{
+    if (!pk) return;
+    for (int i = 0; i < GEVR_LN_MESH_COUNT; i++) {
+        free(pk->meshes[i].verts);
+    }
+    for (int i = 0; i < GEVR_LN_CLIP_COUNT; i++) {
+        free(pk->clips[i]);
+    }
+    memset(pk, 0, sizeof(*pk));
+}
+
+void gevrLnPackUnload(void)
+{
+    lnFreePack(&s_lnPack);
+    s_lnNextStatSec = 0;
+}
+
+int gevrLnPackLoadFile(const char *path)
+{
+    if (!path || !*path) return 0;
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return 0; }
+    long size = ftell(f);
+    if (fseek(f, 0, SEEK_SET) != 0 || size < 16L || size > GEVR_LN_MAX_PACK_BYTES) {
+        fclose(f);
+        return 0;
+    }
+    unsigned char *raw = (unsigned char *)malloc((size_t)size);
+    if (!raw || fread(raw, 1, (size_t)size, f) != (size_t)size) {
+        free(raw);
+        fclose(f);
+        return 0;
+    }
+    fclose(f);
+
+    const unsigned char *p = raw;
+    const unsigned char *end = raw + size;
+    GevrLnPack next;
+    memset(&next, 0, sizeof(next));
+
+    if (memcmp(p, "GEVRLN1\0", 8) != 0) goto bad;
+    const uint32_t nmesh = lnRdU32(p + 8);
+    const uint32_t nclip = lnRdU32(p + 12);
+    p += 16;
+    if (nmesh != GEVR_LN_MESH_COUNT || nclip != GEVR_LN_CLIP_COUNT) goto bad;
+
+    for (int m = 0; m < GEVR_LN_MESH_COUNT; m++) {
+        if ((size_t)(end - p) < 12u) goto bad;
+        next.meshes[m].emitterOffsetCm = lnRdF32(p);
+        next.meshes[m].bladeRadiusCm = lnRdF32(p + 4);
+        const uint32_t ntri = lnRdU32(p + 8);
+        p += 12;
+        if (!isfinite(next.meshes[m].emitterOffsetCm) || fabsf(next.meshes[m].emitterOffsetCm) > 100.0f) goto bad;
+        if (!isfinite(next.meshes[m].bladeRadiusCm) || next.meshes[m].bladeRadiusCm < 0.0f || next.meshes[m].bladeRadiusCm > 50.0f) goto bad;
+        if (ntri < 1u || ntri > GEVR_LN_MAX_TRIS_MESH) goto bad;
+
+        const size_t nverts = (size_t)ntri * 3u;
+        if (nverts * 16u > (size_t)(end - p)) goto bad;
+        next.meshes[m].verts = (GevrLnVtx *)malloc(nverts * sizeof(GevrLnVtx));
+        if (!next.meshes[m].verts) goto bad;
+        next.meshes[m].triCount = (int)ntri;
+        for (size_t i = 0; i < nverts; i++, p += 16) {
+            for (int k = 0; k < 3; k++) {
+                next.meshes[m].verts[i].p[k] = lnRdF32(p + (size_t)k * 4u);
+                if (!isfinite(next.meshes[m].verts[i].p[k]) || fabsf(next.meshes[m].verts[i].p[k]) > 250.0f) goto bad;
+            }
+            memcpy(next.meshes[m].verts[i].rgba, p + 12, 4);
+        }
+    }
+
+    for (int c = 0; c < GEVR_LN_CLIP_COUNT; c++) {
+        if ((size_t)(end - p) < 8u) goto bad;
+        const uint32_t sr = lnRdU32(p);
+        const uint32_t cnt = lnRdU32(p + 4);
+        p += 8;
+        if (sr < 8000u || sr > 48000u || cnt < 1u || cnt > GEVR_LN_MAX_CLIP_SMPS) goto bad;
+        if ((size_t)cnt * 2u > (size_t)(end - p)) goto bad;
+        next.clips[c] = (short *)malloc((size_t)cnt * sizeof(short));
+        if (!next.clips[c]) goto bad;
+        next.clipRate[c] = (int)sr;
+        next.clipLen[c] = (int)cnt;
+        for (uint32_t i = 0; i < cnt; i++, p += 2) {
+            const uint16_t u = (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+            next.clips[c][i] = (short)(int16_t)u;
+        }
+    }
+
+    free(raw);
+    lnFreePack(&s_lnPack);
+    next.loaded = 1;
+    s_lnPack = next;
+    return 1;
+
+bad:
+    free(raw);
+    lnFreePack(&next);
+    return 0;
+}
+
+static const GevrLnPack *lnEnsurePack(void)
+{
+    if (s_lnPack.loaded) return &s_lnPack;
+    if (!gevrIsQuestVrApk()) return NULL;
+    const time_t now = time(NULL);
+    if (s_lnNextStatSec != 0 && now < s_lnNextStatSec) return NULL;
+    s_lnNextStatSec = now + 2;
+    for (unsigned i = 0; i < (unsigned)(sizeof(s_lnPackFiles) / sizeof(s_lnPackFiles[0])); i++) {
+        if (gevrLnPackLoadFile(s_lnPackFiles[i])) return &s_lnPack;
+    }
+    return NULL;
+}
+
+int gevrLnAvailable(void)
+{
+    return gevrIsQuestVrApk() && lnEnsurePack() != NULL;
+}
+
+const GevrLnPack *gevrLnPackGet(void)
+{
+    return lnEnsurePack();
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pack Clip Stereo PCM Audio Mixer (22050 Hz mono clips -> stereo)           */
+/* -------------------------------------------------------------------------- */
 
 typedef struct {
     int active;
-    int id;
+    int clip;
+    float pos;
     float intensity;
-    float t;
-    float dur;
-    float p0;
-    float p1;
 } LnSfxVoice;
 
 static struct {
@@ -520,39 +560,43 @@ static struct {
     float forceEnv;
     float lightEnv;
     float thrownEnv;
-    float phHum1;
-    float phHum2;
-    float phHumLfo;
-    float phForce;
-    float phThrown;
-    unsigned int rng;
+    float humPos;
+    float forcePos;
+    float lightPos;
+    float thrownPos;
+    float spinPanPhase;
     LnSfxVoice voices[GEVR_LN_SFX_VOICES];
     int nextVoice;
-} s_audio = { .rng = 0x13579BDFu };
+} s_audio;
 
 static float lnClamp01(float x)
 {
     return x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x;
 }
 
-static float lnNoise(unsigned int *state)
+static float lnSampleClip(const short *smp, int len, float pos)
 {
-    *state = (*state) * 1664525u + 1013904223u;
-    const int s = (int)((*state >> 16) & 0xFFFFu) - 32768;
-    return (float)s * (1.0f / 32768.0f);
+    if (!smp || len <= 0) return 0.0f;
+    const int i0 = ((int)pos) % len;
+    const int i1 = (i0 + 1) % len;
+    const float frac = pos - (float)(int)pos;
+    const float a = (float)smp[i0] * (1.0f / 32768.0f);
+    const float b = (float)smp[i1] * (1.0f / 32768.0f);
+    return a + (b - a) * frac;
 }
 
-static float lnWrapPhase(float p)
+static float lnStepLoop(int clip, float *pos, float pitch, float dt)
 {
-    if (p >= GEVR_LN_TAU) p -= GEVR_LN_TAU * (float)((int)(p / GEVR_LN_TAU));
-    return p;
+    const int len = s_lnPack.clipLen[clip];
+    if (len <= 0) return 0.0f;
+    *pos += (float)s_lnPack.clipRate[clip] * pitch * dt;
+    while (*pos >= (float)len) *pos -= (float)len;
+    return lnSampleClip(s_lnPack.clips[clip], len, *pos);
 }
 
 void gevrLnAudioReset(void)
 {
-    const unsigned int seed = s_audio.rng ? s_audio.rng : 0x13579BDFu;
     memset(&s_audio, 0, sizeof(s_audio));
-    s_audio.rng = seed;
 }
 
 void gevrLnAudioSetState(int active, int isLasersword, float bladeExtend, float swingSpeed01,
@@ -576,27 +620,15 @@ void gevrLnAudioTrigger(int eventId, float intensity)
     if (intensity > 2.0f) intensity = 2.0f;
     LnSfxVoice *v = &s_audio.voices[s_audio.nextVoice];
     s_audio.nextVoice = (s_audio.nextVoice + 1) % GEVR_LN_SFX_VOICES;
-    memset(v, 0, sizeof(*v));
     v->active = 1;
-    v->id = eventId;
+    v->clip = 3 + eventId; /* eventId 1..8 -> clip 4..11 */
+    v->pos = 0.0f;
     v->intensity = intensity;
-    v->t = 0.0f;
-    switch (eventId) {
-        case GEVR_LN_SFX_IGNITE:      v->dur = 0.42f; break;
-        case GEVR_LN_SFX_SLASH_LASERSWORD: v->dur = 0.28f; break;
-        case GEVR_LN_SFX_SLASH_STEEL: v->dur = 0.22f; break;
-        case GEVR_LN_SFX_DEFLECT:     v->dur = 0.26f; break;
-        case GEVR_LN_SFX_CLASH_LASERSWORD: v->dur = 0.30f; break;
-        case GEVR_LN_SFX_CLASH_METAL: v->dur = 0.34f; break;
-        case GEVR_LN_SFX_FORCE_PUSH:  v->dur = 0.46f; break;
-        case GEVR_LN_SFX_SHADOW_STEP: v->dur = 0.38f; break;
-        default:                      v->dur = 0.20f; break;
-    }
 }
 
 void gevrLnAudioMix(short *pcmStereo, int frames, int sampleRate)
 {
-    if (!pcmStereo || frames <= 0 || sampleRate <= 0) return;
+    if (!pcmStereo || frames <= 0 || sampleRate <= 0 || !s_lnPack.loaded) return;
 
     int anyVoice = 0;
     for (int i = 0; i < GEVR_LN_SFX_VOICES; i++) {
@@ -625,114 +657,52 @@ void gevrLnAudioMix(short *pcmStereo, int frames, int sampleRate)
 
         float sigL = 0.0f, sigR = 0.0f;
 
-        /* Warm dual-detuned lasersword hum + swing Doppler modulation */
         if (s_audio.humEnv > 0.002f) {
-            const float sw = s_audio.swingSmooth;
-            const float fBase = 92.0f + sw * 46.0f;
-            s_audio.phHum1 = lnWrapPhase(s_audio.phHum1 + GEVR_LN_TAU * fBase * dt);
-            s_audio.phHum2 = lnWrapPhase(s_audio.phHum2 + GEVR_LN_TAU * (fBase * 2.015f + 1.8f) * dt);
-            s_audio.phHumLfo = lnWrapPhase(s_audio.phHumLfo + GEVR_LN_TAU * (6.2f + sw * 5.0f) * dt);
-
-            const float lfo = 0.86f + 0.14f * sinf(s_audio.phHumLfo);
-            const float o1 = sinf(s_audio.phHum1);
-            const float o2 = sinf(s_audio.phHum2);
-            const float hum = (0.58f * o1 + 0.28f * o2 + 0.14f * o1 * o2) * lfo;
-            const float amp = s_audio.humEnv * (0.045f + 0.095f * sw);
-            const float pan = 0.12f * sinf(s_audio.phHumLfo);
-            sigL += hum * amp * (1.0f - pan);
-            sigR += hum * amp * (1.0f + pan);
+            const float pitch = 0.96f + 0.34f * s_audio.swingSmooth;
+            const float hum = lnStepLoop(GEVR_LN_CLIP_HUM, &s_audio.humPos, pitch, dt);
+            const float amp = s_audio.humEnv * (0.18f + 0.22f * s_audio.swingSmooth);
+            sigL += hum * amp;
+            sigR += hum * amp;
         }
 
-        /* Force Choke / Pull sub-bass rumble */
         if (s_audio.forceEnv > 0.002f) {
-            s_audio.phForce = lnWrapPhase(s_audio.phForce + GEVR_LN_TAU * 56.0f * dt);
-            const float rumble = (0.72f * sinf(s_audio.phForce) + 0.28f * sinf(s_audio.phForce * 1.98f));
-            const float amp = s_audio.forceEnv * 0.09f;
-            sigL += rumble * amp;
-            sigR += rumble * amp;
+            const float rmb = lnStepLoop(GEVR_LN_CLIP_FORCE_RUMBLE, &s_audio.forcePos, 1.0f, dt);
+            const float amp = s_audio.forceEnv * 0.24f;
+            sigL += rmb * amp;
+            sigR += rmb * amp;
         }
 
-        /* Force Lightning continuous arc crackle */
         if (s_audio.lightEnv > 0.002f) {
-            const float z = lnNoise(&s_audio.rng);
-            const float snap = fabsf(z) > 0.84f ? z * 1.5f : z * 0.25f;
-            const float arc = 0.55f * sinf(s_audio.phHum2 * 1.7f) + 0.45f * snap;
-            const float amp = s_audio.lightEnv * 0.095f;
+            const float arc = lnStepLoop(GEVR_LN_CLIP_LIGHTNING, &s_audio.lightPos, 1.0f, dt);
+            const float amp = s_audio.lightEnv * 0.24f;
             sigL += arc * amp;
-            sigR += -arc * 0.7f * amp + lnNoise(&s_audio.rng) * amp * 0.35f;
+            sigR += arc * amp;
         }
 
-        /* Thrown lasersword or boomerang spin whoosh */
         if (s_audio.thrownEnv > 0.002f) {
             const float spinHz = s_audio.thrownBoom ? 11.5f : 14.0f;
-            s_audio.phThrown = lnWrapPhase(s_audio.phThrown + GEVR_LN_TAU * spinHz * dt);
-            const float mod = 0.5f + 0.5f * sinf(s_audio.phThrown);
-            const float tone = s_audio.thrownBoom ? lnNoise(&s_audio.rng) * 0.6f : sinf(s_audio.phHum1 * 1.35f) * 0.75f;
-            const float whoosh = tone * mod * s_audio.thrownEnv * 0.095f;
-            const float pan = 0.45f * cosf(s_audio.phThrown);
-            sigL += whoosh * (1.0f - pan);
-            sigR += whoosh * (1.0f + pan);
+            s_audio.spinPanPhase += 6.2831853f * spinHz * dt;
+            if (s_audio.spinPanPhase >= 6.2831853f) s_audio.spinPanPhase -= 6.2831853f;
+            const float whoosh = lnStepLoop(GEVR_LN_CLIP_SPIN, &s_audio.thrownPos, s_audio.thrownBoom ? 0.94f : 1.12f, dt);
+            const float amp = s_audio.thrownEnv * 0.24f;
+            const float pan = 0.38f * cosf(s_audio.spinPanPhase);
+            sigL += whoosh * amp * (1.0f - pan);
+            sigR += whoosh * amp * (1.0f + pan);
         }
 
-        /* One-shot event synthesizers */
         for (int i = 0; i < GEVR_LN_SFX_VOICES; i++) {
             LnSfxVoice *v = &s_audio.voices[i];
             if (!v->active) continue;
-            v->t += dt;
-            if (v->t >= v->dur) {
+            const int c = v->clip;
+            const int len = (c >= 0 && c < GEVR_LN_CLIP_COUNT) ? s_lnPack.clipLen[c] : 0;
+            if (len <= 0 || v->pos >= (float)(len - 1)) {
                 v->active = 0;
                 continue;
             }
-            const float u = v->t / v->dur;
-            float mono = 0.0f;
-            const float nz = lnNoise(&s_audio.rng);
-
-            if (v->id == GEVR_LN_SFX_IGNITE) {
-                const float f = 140.0f + 560.0f * (1.0f - (1.0f - u) * (1.0f - u));
-                v->p0 = lnWrapPhase(v->p0 + GEVR_LN_TAU * f * dt);
-                const float hissEnv = expf(-u * 6.5f);
-                const float sweepEnv = sinf(lnClamp01(u) * 3.14159f);
-                mono = (0.65f * nz * hissEnv + 0.55f * sinf(v->p0) * sweepEnv) * 0.24f;
-            } else if (v->id == GEVR_LN_SFX_SLASH_LASERSWORD) {
-                const float f = 110.0f + 160.0f * sinf(u * 3.14159f);
-                v->p0 = lnWrapPhase(v->p0 + GEVR_LN_TAU * f * dt);
-                const float env = sinf(u * 3.14159f);
-                mono = (0.70f * sinf(v->p0) + 0.30f * sinf(v->p0 * 2.02f) + 0.18f * nz) * env * 0.16f;
-            } else if (v->id == GEVR_LN_SFX_SLASH_STEEL) {
-                const float env = sinf(u * 3.14159f) * (1.0f - 0.4f * u);
-                const float f = 900.0f + 700.0f * (1.0f - u);
-                v->p0 = lnWrapPhase(v->p0 + GEVR_LN_TAU * f * dt);
-                mono = (0.70f * nz + 0.30f * sinf(v->p0)) * env * 0.16f;
-            } else if (v->id == GEVR_LN_SFX_DEFLECT) {
-                const float f = 2200.0f * expf(-u * 3.4f) + 260.0f;
-                v->p0 = lnWrapPhase(v->p0 + GEVR_LN_TAU * f * dt);
-                const float env = expf(-u * 5.2f);
-                mono = (0.75f * sinf(v->p0) + 0.35f * nz * expf(-u * 11.0f)) * env * 0.22f;
-            } else if (v->id == GEVR_LN_SFX_CLASH_LASERSWORD) {
-                v->p0 = lnWrapPhase(v->p0 + GEVR_LN_TAU * 310.0f * dt);
-                v->p1 = lnWrapPhase(v->p1 + GEVR_LN_TAU * 437.0f * dt);
-                const float crackle = fabsf(nz) > 0.70f ? nz * 1.3f : nz * 0.35f;
-                const float env = expf(-u * 4.5f);
-                mono = (0.45f * sinf(v->p0 + 1.5f * sinf(v->p1)) + 0.65f * crackle) * env * 0.23f;
-            } else if (v->id == GEVR_LN_SFX_CLASH_METAL) {
-                v->p0 = lnWrapPhase(v->p0 + GEVR_LN_TAU * 1380.0f * dt);
-                v->p1 = lnWrapPhase(v->p1 + GEVR_LN_TAU * 2137.0f * dt);
-                const float env = expf(-u * 6.0f);
-                mono = (0.60f * sinf(v->p0 + 1.8f * sinf(v->p1)) + 0.35f * sinf(v->p1) + 0.30f * nz * expf(-u * 14.0f)) * env * 0.22f;
-            } else if (v->id == GEVR_LN_SFX_FORCE_PUSH) {
-                const float f = 140.0f * expf(-u * 3.5f) + 38.0f;
-                v->p0 = lnWrapPhase(v->p0 + GEVR_LN_TAU * f * dt);
-                const float env = expf(-u * 3.2f);
-                mono = (0.72f * sinf(v->p0) + 0.45f * nz * expf(-u * 5.5f)) * env * 0.26f;
-            } else if (v->id == GEVR_LN_SFX_SHADOW_STEP) {
-                v->p0 = lnWrapPhase(v->p0 + GEVR_LN_TAU * (620.0f + 500.0f * u) * dt);
-                const float env = expf(-u * 4.8f);
-                mono = (0.78f * nz + 0.28f * sinf(v->p0)) * env * 0.20f;
-            }
-
-            mono *= v->intensity;
-            sigL += mono;
-            sigR += mono;
+            const float s = lnSampleClip(s_lnPack.clips[c], len, v->pos) * v->intensity * 0.42f;
+            sigL += s;
+            sigR += s;
+            v->pos += (float)s_lnPack.clipRate[c] * dt;
         }
 
         const float baseL = (float)pcmStereo[n * 2 + 0] * (1.0f / 32768.0f);

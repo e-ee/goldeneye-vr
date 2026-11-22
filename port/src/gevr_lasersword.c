@@ -8,10 +8,6 @@
 #include <string.h>
 #include <time.h>
 
-#define GEVR_LS_HOLD_SEC       0.22f
-#define GEVR_LS_DOUBLETAP_SEC  0.28f
-#define GEVR_LS_SLASH_SEC      0.26f
-#define GEVR_LS_BLOCK_COS      0.42f   /* ~65 deg half-cone */
 #define GEVR_LS_SFX_VOICES     4
 #define GEVR_LS_MAX_TRIS       4096
 #define GEVR_LS_MAX_CLIP_SMPS  88200
@@ -22,6 +18,15 @@
 #else
 #define LS_DIR ""
 #endif
+
+int gevrIsQuestVrApk(void)
+{
+#if defined(__ANDROID__) && !defined(GEVR_FLAT) && !defined(GEVR_MOBILE) && !defined(GEVR_FRAME)
+    return 1;
+#else
+    return 0;
+#endif
+}
 
 static float lsNormalize3(const float v[3], float out[3])
 {
@@ -69,103 +74,6 @@ void gevrLsPalette(int color, unsigned int *coreRgba, unsigned int *glowRgba)
     const int idx = (color >= 0 && color < GEVR_LS_COLOR_COUNT) ? color : GEVR_LS_COLOR_BLUE;
     if (coreRgba) *coreRgba = kCore[idx];
     if (glowRgba) *glowRgba = kGlow[idx];
-}
-
-void gevrLsTriggerReset(GevrLsTrigger *t)
-{
-    if (!t) return;
-    memset(t, 0, sizeof(*t));
-}
-
-int gevrLsTriggerUpdate(GevrLsTrigger *t, int pressed, float dt)
-{
-    if (!t) return GEVR_LS_TRIG_NONE;
-    if (dt < 0.0f) dt = 0.0f;
-
-    if (t->tapTimer > 0.0f) {
-        t->tapTimer -= dt;
-        if (t->tapTimer <= 0.0f) {
-            t->tapTimer = 0.0f;
-            t->pendingTap = 0;
-        }
-    }
-
-    if (pressed && !t->down) {
-        t->down = 1;
-        t->heldSec = 0.0f;
-        if (t->pendingTap && t->tapTimer > 0.0f) {
-            t->pendingTap = 0;
-            t->tapTimer = 0.0f;
-            t->holdFired = 2; /* suppress release tap/hold after double-tap */
-            return GEVR_LS_TRIG_DOUBLE_TAP;
-        }
-        t->holdFired = 0;
-        return GEVR_LS_TRIG_NONE;
-    }
-
-    if (pressed && t->down) {
-        if (t->holdFired == 2) {
-            return GEVR_LS_TRIG_NONE;
-        }
-        t->heldSec += dt;
-        if (t->holdFired == 0 && t->heldSec >= GEVR_LS_HOLD_SEC) {
-            t->holdFired = 1;
-            t->pendingTap = 0;
-            t->tapTimer = 0.0f;
-            return GEVR_LS_TRIG_HOLD_START;
-        }
-        if (t->holdFired == 1) {
-            return GEVR_LS_TRIG_HOLD_ACTIVE;
-        }
-        return GEVR_LS_TRIG_NONE;
-    }
-
-    if (!pressed && t->down) {
-        const int wasHold = t->holdFired;
-        t->down = 0;
-        t->heldSec = 0.0f;
-        t->holdFired = 0;
-        if (wasHold == 1) {
-            return GEVR_LS_TRIG_HOLD_RELEASE;
-        }
-        if (wasHold == 2) {
-            return GEVR_LS_TRIG_NONE;
-        }
-        t->pendingTap = 1;
-        t->tapTimer = GEVR_LS_DOUBLETAP_SEC;
-        return GEVR_LS_TRIG_TAP;
-    }
-
-    return GEVR_LS_TRIG_NONE;
-}
-
-int gevrLsSlashStart(GevrLsSlash *s, int blocking)
-{
-    if (!s || blocking || s->active) {
-        return 0;
-    }
-    s->active = 1;
-    s->dir = s->nextSide ? 1 : 0;
-    s->nextSide = !s->dir;
-    s->t = 0.0f;
-    s->duration = GEVR_LS_SLASH_SEC;
-    return 1;
-}
-
-float gevrLsSlashStep(GevrLsSlash *s, float dt)
-{
-    if (!s || !s->active) {
-        return -1.0f;
-    }
-    if (dt < 0.0f) dt = 0.0f;
-    if (s->duration <= 0.0f) s->duration = GEVR_LS_SLASH_SEC;
-    s->t += dt;
-    if (s->t >= s->duration) {
-        s->active = 0;
-        s->t = 0.0f;
-        return 1.0f;
-    }
-    return s->t / s->duration;
 }
 
 int gevrLsVrWristThrow(const float handVelCmS[3], const float aimFwd[3], int releasedFromHold)
@@ -284,27 +192,6 @@ int gevrLsBulletTravelToShooter(const float bulletTravel[3], float outToShooter[
     return 1;
 }
 
-int gevrLsCheckBlock(int blocking, const float playerFwd[3], const float toShooterDir[3],
-                     float outReflectDir[3])
-{
-    float fwd[3], toShooter[3];
-    if (!blocking || !playerFwd || !toShooterDir) {
-        return GEVR_LS_BLOCK_NONE;
-    }
-    if (lsNormalize3(playerFwd, fwd) <= 0.0f || lsNormalize3(toShooterDir, toShooter) <= 0.0f) {
-        return GEVR_LS_BLOCK_NONE;
-    }
-    if (lsDot3(fwd, toShooter) < GEVR_LS_BLOCK_COS) {
-        return GEVR_LS_BLOCK_NONE;
-    }
-    if (outReflectDir) {
-        outReflectDir[0] = toShooter[0];
-        outReflectDir[1] = toShooter[1];
-        outReflectDir[2] = toShooter[2];
-    }
-    return GEVR_LS_BLOCK_DEFLECT;
-}
-
 int gevrLsCheckVrBladeBlock(int blocking, const float playerFwd[3], const float bladeDirW[3],
                             const float handAimW[3], const float toShooterDir[3],
                             float outReflectDir[3])
@@ -398,24 +285,6 @@ void gevrLsReflectVec(const float v[3], const float n[3], float out[3])
     out[0] = v[0] - d * nn[0];
     out[1] = v[1] - d * nn[1];
     out[2] = v[2] - d * nn[2];
-}
-
-static int s_lsFlatRtDown;
-static int s_lsFlatLtDown;
-static int s_lsFlatIsMouse;
-
-void gevrLsInputFeedFlat(int rtDown, int ltDown, int isMouse)
-{
-    s_lsFlatRtDown = rtDown ? 1 : 0;
-    s_lsFlatLtDown = ltDown ? 1 : 0;
-    s_lsFlatIsMouse = isMouse ? 1 : 0;
-}
-
-void gevrLsInputReadFlat(int *rtDown, int *ltDown, int *isMouse)
-{
-    if (rtDown) *rtDown = s_lsFlatRtDown;
-    if (ltDown) *ltDown = s_lsFlatLtDown;
-    if (isMouse) *isMouse = s_lsFlatIsMouse;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -539,6 +408,7 @@ bad:
 static const GevrLsPack *lsEnsurePack(void)
 {
     if (s_pack.loaded) return &s_pack;
+    if (!gevrIsQuestVrApk()) return NULL;
     const time_t now = time(NULL);
     if (s_nextStatSec != 0 && now < s_nextStatSec) return NULL;
     s_nextStatSec = now + 2;
@@ -550,7 +420,7 @@ static const GevrLsPack *lsEnsurePack(void)
 
 int gevrLsAvailable(void)
 {
-    return lsEnsurePack() != NULL;
+    return gevrIsQuestVrApk() && lsEnsurePack() != NULL;
 }
 
 const GevrLsPack *gevrLsPackGet(void)

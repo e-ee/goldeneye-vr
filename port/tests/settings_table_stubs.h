@@ -48,8 +48,12 @@ float VrMusicVolume = 1, VrSfxVolume = 1, VrVoiceVolume = 1;
 static int s_bean, s_saves, s_net, s_host, s_coop, s_horde, s_netSpeed, s_netFast, s_applied;
 static int s_cfg[64], s_muted, s_sfxApplied;
 static unsigned short s_music = 32767;
+static int s_questVr = 1;
+static int s_lnAvail = 1;
 int gevrHatAvailable(void) { return 1; }
 int gevrLsAvailable(void) { return 1; }
+int gevrLnAvailable(void) { return s_lnAvail; }
+int gevrIsQuestVrApk(void) { return s_questVr; }
 int gevrBeanIsAvailable(void) { return 1; }
 int gevrBeanIsEnabled(void) { return s_bean; }
 void gevrBeanSetEnabled(int on) { s_bean = on; }

@@ -121,9 +121,6 @@ std::vector<Pack> packList()
         modPack("oddjob-hat", "Oddjob's hat", "Eurocom / EA (007 Nightfire), GoldenEye VR", "1.1",
                 "https://github.com/MrSco/goldeneye-vr-mods/releases/download/oddjob-hat-1.1/oddjob-hat-1.1.zip",
                 16626LL, "MrSco/goldeneye-vr-mods", "oddjob-hat-", "oddjob-hat-", ".zip", { "oddjob_hat.bin" }),
-        modPack("lasersword", "Lasersword", "GoldenEye VR community", "1.0",
-                "https://github.com/e-ee/goldeneye-vr-mods/releases/download/lasersword-1.0/lasersword-1.0.zip",
-                80580LL, "e-ee/goldeneye-vr-mods", "lasersword-", "lasersword-", ".zip", { "lasersword.bin" }),
     };
 }
 

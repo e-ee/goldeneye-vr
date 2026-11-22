@@ -6,6 +6,7 @@
 #include "gevr_bean_ce.h"
 #include "gevr_oddjobhat.h"
 #include "gevr_lasersword.h"
+#include "gevr_lasersword_ninja.h"
 /*
  * GoldenEye VR launcher, inside VR.
  *
@@ -1078,6 +1079,125 @@ struct ModPack {
     int mb = 0, progress = -1;
 };
 
+static const std::vector<ModPack> &gevrPollModPacks(Uint32 now)
+{
+    static std::vector<ModPack> packs;
+    static Uint32 lastPoll = 0;
+    static bool checked = false;
+    if (!checked) {
+        checked = true;
+        gevrJavaCommand("modsCommand", "check");   // newer pack releases on GitHub (ModManager.checkLatest)
+    }
+    if (now - lastPoll > 250 || lastPoll == 0) {
+        lastPoll = now;
+        gevrBeanInit();   // an imported or downloaded pack becomes available without reopening the launcher
+        packs.clear();
+        std::string raw = gevrJavaString("modsStatus");
+        if (!raw.empty()) {
+            for (const std::string &line : gevrSplit(raw, '\n')) {
+                std::vector<std::string> f = gevrSplit(line, '\t');
+                if (f.size() < 9) continue;
+                ModPack p;
+                p.id = f[0];
+                p.title = f[1];
+                p.by = f[2];
+                p.site = f[3];
+                p.version = f[4];
+                p.mb = atoi(f[5].c_str());
+                p.state = f[6];
+                p.progress = atoi(f[7].c_str());
+                p.message = f[8];
+                if (f.size() > 9) p.update = f[9];
+                packs.push_back(p);
+            }
+        }
+    }
+    return packs;
+}
+
+static void gevrDrawInlineLsPack(Uint32 now, const ImVec4 &gold, const ImVec4 &bad)
+{
+    if (!gevrIsQuestVrApk()) return;
+    for (const ModPack &p : gevrPollModPacks(now)) {
+        if (p.id != "lasersword") continue;
+        ImGui::PushID("inline-ls-pack");
+        ImGui::SameLine();
+        const bool busy = p.state == "downloading" || p.state == "installing";
+        if (busy) {
+            ImGui::TextColored(gold, "Lasersword %d%%", p.progress < 0 ? 0 : p.progress);
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Cancel")) gevrJavaCommand("modsCommand", "cancel");
+        } else if (p.state == "installed" || gevrLsAvailable()) {
+            if (!p.update.empty()) {
+                if (ImGui::SmallButton("Update Lasersword")) gevrJavaCommand("modsCommand", "install:lasersword");
+                if (p.state == "installed") ImGui::SameLine();
+            }
+            if (p.state == "installed") {
+                if (ImGui::SmallButton("Remove Lasersword")) {
+                    gevrJavaCommand("modsCommand", "remove:lasersword");
+                    gevrLsPackUnload();
+                    VrLasersword = 0;
+                    vrSettingsSave();
+                }
+            }
+        } else {
+            if (ImGui::SmallButton(p.state == "error" ? "Retry Lasersword" : "Get Lasersword"))
+                gevrJavaCommand("modsCommand", "install:lasersword");
+            if (ImGui::IsItemHovered() && p.state == "error") {
+                ImGui::PushStyleColor(ImGuiCol_Text, bad);
+                gevrTooltip("%s", p.message.c_str());
+                ImGui::PopStyleColor();
+            }
+        }
+        ImGui::PopID();
+    }
+}
+
+static void gevrDrawInlineLnPackBar(Uint32 now, const ImVec4 &gold, const ImVec4 &bad, const char *desc)
+{
+    if (!gevrIsQuestVrApk()) return;
+    for (const ModPack &p : gevrPollModPacks(now)) {
+        if (p.id != "lasersword-ninja") continue;
+        bool widget = false;
+        ImGui::PushID("inline-ln-pack");
+        const bool busy = p.state == "downloading" || p.state == "installing";
+        if (busy) {
+            ImGui::TextColored(gold, "Pack %d%%", p.progress < 0 ? 0 : p.progress);
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Cancel")) gevrJavaCommand("modsCommand", "cancel");
+            widget = true;
+        } else if (p.state == "installed" || gevrLnAvailable()) {
+            if (!p.update.empty()) {
+                if (ImGui::SmallButton("Update Pack")) gevrJavaCommand("modsCommand", "install:lasersword-ninja");
+                if (p.state == "installed") ImGui::SameLine();
+                widget = true;
+            }
+            if (p.state == "installed") {
+                if (ImGui::SmallButton("Remove Pack")) {
+                    gevrJavaCommand("modsCommand", "remove:lasersword-ninja");
+                    gevrLnPackUnload();
+                    VrLaserswordNinjaMode = 0;
+                    vrSettingsSave();
+                }
+                widget = true;
+            }
+        } else {
+            if (ImGui::SmallButton(p.state == "error" ? "Retry Pack" : "Get Lasersword & Ninja"))
+                gevrJavaCommand("modsCommand", "install:lasersword-ninja");
+            if (ImGui::IsItemHovered() && p.state == "error") {
+                ImGui::PushStyleColor(ImGuiCol_Text, bad);
+                gevrTooltip("%s", p.message.c_str());
+                ImGui::PopStyleColor();
+            }
+            widget = true;
+        }
+        ImGui::PopID();
+        if (widget) ImGui::SameLine();
+        break;
+    }
+    ImGui::TextDisabled("%s", desc);
+}
+
 /*
  * The main page's START row, with the campaign beside it rather than above:
  * the page is laid out to its last pixel and must not scroll, so choosing
@@ -1149,38 +1269,8 @@ static int gevrLauncherStartRow(int *campaign, bool gfGood, bool tndGood, bool m
 
 static void gevrModsPage(Uint32 now, const ImVec4 &gold, const ImVec4 &good, const ImVec4 &bad)
 {
-    static std::vector<ModPack> packs;
-    static Uint32 lastPoll = 0;
-    static bool checked = false;
     static std::string beanMessage;   // the picker would not open
-    if (!checked) {
-        checked = true;
-        gevrJavaCommand("modsCommand", "check");   // newer pack releases on GitHub (ModManager.checkLatest)
-    }
-    if (now - lastPoll > 250 || lastPoll == 0) {
-        lastPoll = now;
-        gevrBeanInit();   // an imported or downloaded pack becomes available without reopening the launcher
-        packs.clear();
-        std::string raw = gevrJavaString("modsStatus");
-        if (!raw.empty()) {
-            for (const std::string &line : gevrSplit(raw, '\n')) {
-                std::vector<std::string> f = gevrSplit(line, '\t');
-                if (f.size() < 9) continue;
-                ModPack p;
-                p.id = f[0];
-                p.title = f[1];
-                p.by = f[2];
-                p.site = f[3];
-                p.version = f[4];
-                p.mb = atoi(f[5].c_str());
-                p.state = f[6];
-                p.progress = atoi(f[7].c_str());
-                p.message = f[8];
-                if (f.size() > 9) p.update = f[9];
-                packs.push_back(p);
-            }
-        }
-    }
+    const std::vector<ModPack> &packs = gevrPollModPacks(now);
 
     if (ImGui::RadioButton("Original", !gevrBeanIsEnabled() && !g_ActiveExtTexPack[0])) {
         g_ActiveExtTexPack[0] = '\0';
@@ -1193,7 +1283,7 @@ static void gevrModsPage(Uint32 now, const ImVec4 &gold, const ImVec4 &good, con
         ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthStretch, 1.2f);
         for (const ModPack &p : packs) {
-            if (p.id == "oddjob-hat" || p.id == "lasersword") continue;   // mods, not looks: the rows above Done
+            if (p.id == "oddjob-hat" || p.id == "lasersword" || p.id == "lasersword-ninja") continue;   // mods, not looks: the rows above Done
             ImGui::PushID(p.id.c_str());
             const bool bean = p.id == "ge007-bean";
             const bool installed = p.state == "installed";
@@ -1407,35 +1497,79 @@ static void gevrModsPage(Uint32 now, const ImVec4 &gold, const ImVec4 &good, con
         }
         ImGui::PopID();
     }
-    for (const ModPack &p : packs) {
-        if (p.id != "lasersword") continue;
-        ImGui::PushID("lasersword");
-        const bool busy = p.state == "downloading" || p.state == "installing";
-        if (busy) {
-            ImGui::TextColored(gold, "Lasersword %d%%", p.progress < 0 ? 0 : p.progress);
-            ImGui::SameLine();
-            if (ImGui::SmallButton("Cancel")) gevrJavaCommand("modsCommand", "cancel");
-        } else if (p.state == "installed" || gevrLsAvailable()) {
-            bool ls = VrLasersword != 0;
-            if (ImGui::Checkbox("Lasersword", &ls)) { VrLasersword = ls ? 1 : 0; vrSettingsSave(); }
-            if (ImGui::IsItemHovered())
-                gevrTooltip("Adds an optional Lasersword melee weapon (3D hilt mesh and SFX)\nwith deflection, throwing and dismemberment.");
-            if (!p.update.empty()) {
+    if (gevrIsQuestVrApk()) {
+        bool drewLs = false;
+        for (const ModPack &p : packs) {
+            if (p.id != "lasersword") continue;
+            drewLs = true;
+            ImGui::PushID("lasersword");
+            const bool busy = p.state == "downloading" || p.state == "installing";
+            if (busy) {
+                ImGui::TextColored(gold, "Lasersword %d%%", p.progress < 0 ? 0 : p.progress);
                 ImGui::SameLine();
-                if (ImGui::SmallButton("Update")) gevrJavaCommand("modsCommand", "install:lasersword");
+                if (ImGui::SmallButton("Cancel")) gevrJavaCommand("modsCommand", "cancel");
+            } else if (p.state == "installed" || gevrLsAvailable()) {
+                bool ls = VrLasersword != 0;
+                if (ImGui::Checkbox("Lasersword", &ls)) { VrLasersword = ls ? 1 : 0; vrSettingsSave(); }
+                if (ImGui::IsItemHovered())
+                    gevrTooltip("Adds an optional Lasersword melee weapon (3D hilt mesh and SFX)\nwith deflection, throwing and dismemberment.");
+                if (!p.update.empty()) {
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Update")) gevrJavaCommand("modsCommand", "install:lasersword");
+                }
+                if (p.state == "installed") {
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Remove")) {
+                        gevrJavaCommand("modsCommand", "remove:lasersword");
+                        gevrLsPackUnload();
+                        VrLasersword = 0;
+                        vrSettingsSave();
+                    }
+                }
+            } else {
+                if (ImGui::SmallButton(p.state == "error" ? "Retry Lasersword" : "Get Lasersword"))
+                    gevrJavaCommand("modsCommand", "install:lasersword");
+                if (ImGui::IsItemHovered())
+                    gevrTooltip(p.state == "error" ? "%s" : "Adds an optional Lasersword melee weapon (3D hilt mesh and SFX).\nA small download.",
+                                      p.message.c_str());
             }
-            if (p.state == "installed") {
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Remove")) gevrJavaCommand("modsCommand", "remove:lasersword");
-            }
-        } else {
-            if (ImGui::SmallButton(p.state == "error" ? "Retry Lasersword" : "Get Lasersword"))
-                gevrJavaCommand("modsCommand", "install:lasersword");
-            if (ImGui::IsItemHovered())
-                gevrTooltip(p.state == "error" ? "%s" : "Adds an optional Lasersword melee weapon (3D hilt mesh and SFX).\nA small download.",
-                                  p.message.c_str());
+            ImGui::PopID();
         }
-        ImGui::PopID();
+        for (const ModPack &p : packs) {
+            if (p.id != "lasersword-ninja") continue;
+            if (drewLs) ImGui::SameLine();
+            ImGui::PushID("lasersword-ninja");
+            const bool busy = p.state == "downloading" || p.state == "installing";
+            if (busy) {
+                ImGui::TextColored(gold, "LS & Ninja %d%%", p.progress < 0 ? 0 : p.progress);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Cancel")) gevrJavaCommand("modsCommand", "cancel");
+            } else if (p.state == "installed" || gevrLnAvailable()) {
+                ImGui::TextColored(good, "LS & Ninja");
+                if (ImGui::IsItemHovered())
+                    gevrTooltip("Lasersword & Ninja pack installed (3D hilts, katanas, shield, boomerangs and SFX).\nEnable Lasersword or Ninja mode under Rules.");
+                if (!p.update.empty()) {
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Update")) gevrJavaCommand("modsCommand", "install:lasersword-ninja");
+                }
+                if (p.state == "installed") {
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Remove")) {
+                        gevrJavaCommand("modsCommand", "remove:lasersword-ninja");
+                        gevrLnPackUnload();
+                        VrLaserswordNinjaMode = 0;
+                        vrSettingsSave();
+                    }
+                }
+            } else {
+                if (ImGui::SmallButton(p.state == "error" ? "Retry LS & Ninja" : "Get LS & Ninja"))
+                    gevrJavaCommand("modsCommand", "install:lasersword-ninja");
+                if (ImGui::IsItemHovered())
+                    gevrTooltip(p.state == "error" ? "%s" : "Adds Lasersword & Ninja modes (3D hilts, katanas, shield, boomerangs and SFX).\nA small download.",
+                                      p.message.c_str());
+            }
+            ImGui::PopID();
+        }
     }
 }
 
@@ -3847,6 +3981,7 @@ extern "C" void gevrLauncherRun(void)
             ImGui::TextWrapped("%s", text);
             ImGui::PopStyleColor();
         };
+        launcherTabs.questVrMods = gevrIsQuestVrApk() != 0;
         gevrLauncherTabRows(launcherTabs, [&](int tab, int sub) {
             if (tab == GEVR_LTAB_MULTIPLAYER) {
                 // Online play: GoldenEye's every mode, a hack campaign's co-op (gevrCampaignCoop).
@@ -3978,16 +4113,17 @@ extern "C" void gevrLauncherRun(void)
                         else VrFastReinforcements = 0;
                         vrSettingsSave();
                     }
+                    gevrDrawInlineLsPack(now, gold, bad);
                 } else if (sub == GEVR_LSUB_ALLY) {
                     // #194: Natalya as a companion (src/game/gevr_ally.c). The host's choice in co-op and Horde.
                     note("GoldenEye solo, campaign co-op and Horde: one companion for the party. The host chooses; "
                          "changes apply from the next mission or Horde retry.");
                     gevrSettingsSection(settings, GEVR_LSEC_ALLY, GEVR_SET_LAUNCHER);
                 } else if (sub == GEVR_LSUB_LASERSWORD) {
-                    note("Lasersword, Force powers and rival duelists. Enabling Lasersword mode disables Ninja mode.");
+                    gevrDrawInlineLnPackBar(now, gold, bad, "Lasersword, Force powers and rival duelists.");
                     gevrSettingsSection(settings, GEVR_LSEC_LASERSWORD, GEVR_SET_LAUNCHER);
                 } else if (sub == GEVR_LSUB_NINJA) {
-                    note("Katana, boomerangs, shield, Shadow-Step and Evil Ninjas. Enabling Ninja mode disables Lasersword mode.");
+                    gevrDrawInlineLnPackBar(now, gold, bad, "Katana, boomerangs, shield and Shadow-Step.");
                     gevrSettingsSection(settings, GEVR_LSEC_NINJA, GEVR_SET_LAUNCHER);
                 } else {
                     gevrCheatsPage(settings, gold);

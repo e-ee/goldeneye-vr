@@ -1,4 +1,5 @@
 #include "gevr_lasersword_ninja.h"
+#include "gevr_lasersword.h"
 
 #include <assert.h>
 #include <math.h>
@@ -38,48 +39,6 @@ static void test_palette_and_metrics(void)
         else seenNormal = 1;
     }
     assert(seenTiny && seenNormal && seenGiant);
-}
-
-static void test_triggers_and_slash(void)
-{
-    GevrLnTrigger t;
-    gevrLnTriggerReset(&t);
-
-    /* Single quick tap emits TAP immediately on release */
-    assert(gevrLnTriggerUpdate(&t, 1, 0.016f) == GEVR_LN_TRIG_NONE);
-    assert(gevrLnTriggerUpdate(&t, 1, 0.050f) == GEVR_LN_TRIG_NONE);
-    assert(gevrLnTriggerUpdate(&t, 0, 0.016f) == GEVR_LN_TRIG_TAP);
-
-    /* Wait past double-tap window -> fresh press does not double-tap */
-    assert(gevrLnTriggerUpdate(&t, 0, 0.35f) == GEVR_LN_TRIG_NONE);
-    assert(gevrLnTriggerUpdate(&t, 1, 0.016f) == GEVR_LN_TRIG_NONE);
-    assert(gevrLnTriggerUpdate(&t, 0, 0.016f) == GEVR_LN_TRIG_TAP);
-
-    /* Second quick press within 0.28s emits DOUBLE_TAP, release emits NONE */
-    assert(gevrLnTriggerUpdate(&t, 1, 0.05f) == GEVR_LN_TRIG_DOUBLE_TAP);
-    assert(gevrLnTriggerUpdate(&t, 1, 0.30f) == GEVR_LN_TRIG_NONE);
-    assert(gevrLnTriggerUpdate(&t, 0, 0.016f) == GEVR_LN_TRIG_NONE);
-
-    /* Hold >= 0.22s emits HOLD_START, HOLD_ACTIVE, then HOLD_RELEASE */
-    gevrLnTriggerReset(&t);
-    assert(gevrLnTriggerUpdate(&t, 1, 0.016f) == GEVR_LN_TRIG_NONE);
-    assert(gevrLnTriggerUpdate(&t, 1, 0.10f) == GEVR_LN_TRIG_NONE);
-    assert(gevrLnTriggerUpdate(&t, 1, 0.10f) == GEVR_LN_TRIG_NONE);
-    assert(gevrLnTriggerUpdate(&t, 1, 0.05f) == GEVR_LN_TRIG_HOLD_START);
-    assert(gevrLnTriggerUpdate(&t, 1, 0.05f) == GEVR_LN_TRIG_HOLD_ACTIVE);
-    assert(gevrLnTriggerUpdate(&t, 0, 0.016f) == GEVR_LN_TRIG_HOLD_RELEASE);
-
-    /* Alternating slash: blocked while blocking=1, alternates R->L / L->R otherwise */
-    GevrLnSlash s = {0};
-    assert(gevrLnSlashStart(&s, 1) == 0);
-    assert(gevrLnSlashStart(&s, 0) == 1);
-    assert(s.dir == 0);
-    assert(gevrLnSlashStart(&s, 0) == 0); /* cannot start while active */
-    assert(gevrLnSlashStep(&s, 0.13f) > 0.45f);
-    assert(gevrLnSlashStep(&s, 0.20f) == 1.0f);
-    assert(gevrLnSlashStep(&s, 0.016f) < 0.0f);
-    assert(gevrLnSlashStart(&s, 0) == 1);
-    assert(s.dir == 1);
 }
 
 static void test_vr_wrist_and_ignition(void)
@@ -194,21 +153,7 @@ static void test_choke_limbs_and_thrown_body(void)
 static void test_block_and_deflect(void)
 {
     const float fwd[3] = { 0.0f, 0.0f, -1.0f };
-    const float shooterFront[3] = { 0.1f, 0.0f, -0.99f };
-    const float shooterBack[3] = { 0.0f, 0.0f, 1.0f };
     float refl[3] = {0};
-
-    assert(gevrLnCheckBlock(GEVR_LN_LASERSWORD, 0, 0, fwd, shooterFront, refl) == GEVR_LN_BLOCK_NONE);
-    assert(gevrLnCheckBlock(GEVR_LN_LASERSWORD, 1, 0, fwd, shooterBack, refl) == GEVR_LN_BLOCK_NONE);
-    assert(gevrLnCheckBlock(GEVR_LN_LASERSWORD, 1, 0, fwd, shooterFront, refl) == GEVR_LN_BLOCK_DEFLECT);
-    assert(refl[2] < -0.9f);
-    assert(gevrLnCheckBlock(GEVR_LN_NINJA, 1, 0, fwd, shooterFront, refl) == GEVR_LN_BLOCK_ABSORB);
-    assert(gevrLnCheckBlock(GEVR_LN_NINJA, 1, 1, fwd, shooterFront, refl) == GEVR_LN_BLOCK_DEFLECT);
-
-    int rt = 0, lt = 0, mouse = 0;
-    gevrLnInputFeedFlat(1, 0, 1);
-    gevrLnInputReadFlat(&rt, &lt, &mouse);
-    assert(rt == 1 && lt == 0 && mouse == 1);
 
     /* Corridor boomerang reflection */
     const float v[3] = { 10.0f, 0.0f, -10.0f };
@@ -227,11 +172,8 @@ static void test_block_and_deflect(void)
     assert(gevrLnBulletTravelToShooter(zeroVec, toShooter) == 0);
     assert(gevrLnBulletTravelToShooter(frontTravel, toShooter) == 1);
     assert(fabsf(toShooter[0]) < 1e-4f && fabsf(toShooter[1]) < 1e-4f && fabsf(toShooter[2] + 1.0f) < 1e-4f);
-    assert(gevrLnCheckBlock(GEVR_LN_LASERSWORD, 1, 0, fwd, toShooter, refl) == GEVR_LN_BLOCK_DEFLECT);
-    assert(refl[2] < -0.9f);
     assert(gevrLnBulletTravelToShooter(rearTravel, toShooter) == 1);
     assert(fabsf(toShooter[0]) < 1e-4f && fabsf(toShooter[1]) < 1e-4f && fabsf(toShooter[2] - 1.0f) < 1e-4f);
-    assert(gevrLnCheckBlock(GEVR_LN_LASERSWORD, 1, 0, fwd, toShooter, refl) == GEVR_LN_BLOCK_NONE);
 
     /* Tracked 3D VR blade / shield orientation blocking */
     const float bladeAcross[3] = { 0.0f, 1.0f, 0.0f };
@@ -268,9 +210,39 @@ static void test_block_and_deflect(void)
     assert(gevrLnSegmentHitCylinder(loA, loB, cylBase, 40.0f, 175.0f, hitPt) == 0);
 }
 
-static void test_procedural_audio(void)
+static void test_pack_and_audio(const char *packPath, const char *badPath)
 {
     short buf[1024];
+
+    /* Non-Quest builds never auto-load or enable Quest VR mods */
+    assert(gevrIsQuestVrApk() == 0);
+    assert(gevrLnAvailable() == 0);
+    assert(gevrLnPackGet() == NULL);
+    assert(gevrLnPackLoadFile(badPath) == 0);
+    assert(gevrLnPackGet() == NULL);
+
+    /* Explicit pack file load validates all 7 meshes and 12 PCM SFX clips */
+    assert(gevrLnPackLoadFile(packPath) == 1);
+    const GevrLnPack *pk = gevrLnPackGet();
+    assert(pk != NULL && pk->loaded);
+    for (int m = 0; m < GEVR_LN_MESH_COUNT; m++) {
+        assert(pk->meshes[m].triCount > 0);
+        assert(pk->meshes[m].verts != NULL);
+        for (int v = 0; v < pk->meshes[m].triCount * 3; v++) {
+            for (int k = 0; k < 3; k++) {
+                assert(isfinite(pk->meshes[m].verts[v].p[k]));
+            }
+        }
+    }
+    for (int c = 0; c < GEVR_LN_CLIP_COUNT; c++) {
+        assert(pk->clipRate[c] == 22050);
+        assert(pk->clipLen[c] > 0);
+        assert(pk->clips[c] != NULL);
+    }
+
+    /* Failed load must preserve an already-loaded pack */
+    assert(gevrLnPackLoadFile(badPath) == 0);
+    assert(gevrLnPackGet() == pk);
 
     /* Inactive with no triggers leaves buffer untouched */
     gevrLnAudioReset();
@@ -278,7 +250,7 @@ static void test_procedural_audio(void)
     gevrLnAudioMix(buf, 512, 22050);
     for (int i = 0; i < 1024; i++) assert(buf[i] == 0);
 
-    /* Active Lasersword hum + swing Doppler + Force Lightning + thrown boomerang produces bounded nonzero PCM */
+    /* Active Lasersword hum + swing + Force Lightning + thrown boomerang produces bounded nonzero PCM */
     gevrLnAudioSetState(1, 1, 1.0f, 0.9f, 1, 1, 1, 1);
     memset(buf, 0, sizeof(buf));
     gevrLnAudioMix(buf, 512, 22050);
@@ -289,7 +261,7 @@ static void test_procedural_audio(void)
     }
     assert(energy > 50000);
 
-    /* Every one-shot procedural SFX produces bounded nonzero energy and decays cleanly */
+    /* Every one-shot clip SFX produces bounded nonzero energy and decays cleanly */
     for (int sfx = GEVR_LN_SFX_IGNITE; sfx <= GEVR_LN_SFX_SHADOW_STEP; sfx++) {
         gevrLnAudioReset();
         gevrLnAudioTrigger(sfx, 1.0f);
@@ -309,17 +281,24 @@ static void test_procedural_audio(void)
         gevrLnAudioMix(buf, 512, 22050);
         for (int i = 0; i < 1024; i++) assert(buf[i] == 0);
     }
+
+    gevrLnPackUnload();
+    assert(gevrLnPackGet() == NULL);
+    gevrLnAudioSetState(1, 1, 1.0f, 0.9f, 1, 1, 1, 1);
+    memset(buf, 0, sizeof(buf));
+    gevrLnAudioMix(buf, 512, 22050);
+    for (int i = 0; i < 1024; i++) assert(buf[i] == 0);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    assert(argc >= 3);
     test_palette_and_metrics();
-    test_triggers_and_slash();
     test_vr_wrist_and_ignition();
     test_thrown_lasersword_and_boomerang();
     test_choke_limbs_and_thrown_body();
     test_block_and_deflect();
-    test_procedural_audio();
-    puts("lasersword & ninja core: all passed");
+    test_pack_and_audio(argv[1], argv[2]);
+    puts("lasersword & ninja core + pack: all passed");
     return 0;
 }

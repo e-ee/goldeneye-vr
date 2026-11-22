@@ -61,6 +61,7 @@ struct GevrLauncherTabs {
     int sub[GEVR_LTAB_COUNT] = {};     // each tab's sub-tab drawn last
     int openTop = -1, openSub = -1;    // brought up over the next frames
     int openFrames = 0;
+    bool questVrMods = true;
     // ImGui selects a tab a frame after asking, and only then draws its
     // sub-tab row: the ask stands until both are up, a few frames at most
     void open(int tab, int subTab = -1) { openTop = tab; openSub = subTab; openFrames = 4; }
@@ -69,11 +70,12 @@ inline const char *gevrLauncherTabName(int tab) {
     static const char *const names[GEVR_LTAB_COUNT] = { "Play", "Ghosts", "Multiplayer", "Controls", "Comfort", "Screen", "Rules", "Mods" };
     return tab >= 0 && tab < GEVR_LTAB_COUNT ? names[tab] : "";
 }
-inline int gevrLauncherSubCount(int tab) {
+inline int gevrLauncherSubCount(int tab, bool questVrMods = true) {
 #ifdef GEVR_FLAT
     if (tab == GEVR_LTAB_CONTROLS) return 0;   // a flat game: the sub-tabs are tracked controllers'
+    if (tab == GEVR_LTAB_RULES) return 3;      // Lasersword and Ninja sub-tabs are Quest VR APK only
 #endif
-    return tab == GEVR_LTAB_MULTIPLAYER ? 5 : tab == GEVR_LTAB_CONTROLS ? 4 : tab == GEVR_LTAB_RULES ? 5 : 0;
+    return tab == GEVR_LTAB_MULTIPLAYER ? 5 : tab == GEVR_LTAB_CONTROLS ? 4 : tab == GEVR_LTAB_RULES ? (questVrMods ? 5 : 3) : 0;
 }
 inline const char *gevrLauncherSubName(int tab, int sub) {
     static const char *const controls[] = { "Hands", "Gestures", "Throwing", "Haptics" };
@@ -90,7 +92,7 @@ inline void gevrLauncherTabRows(GevrLauncherTabs &tabs, Page page) {
             const ImGuiTabItemFlags open = t == tabs.openTop ? ImGuiTabItemFlags_SetSelected : 0;
             if (!ImGui::BeginTabItem(gevrLauncherTabName(t), nullptr, open)) continue;
             tabs.top = t;
-            const int subs = gevrLauncherSubCount(t);
+            const int subs = gevrLauncherSubCount(t, tabs.questVrMods);
             if (subs == 0) {
                 page(t, -1);
             } else {

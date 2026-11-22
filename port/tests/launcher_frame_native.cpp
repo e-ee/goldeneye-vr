@@ -29,6 +29,19 @@ static int VrUnlockAll = 1;
 static int customPages;
 static void gevrHapticsPage(const ImVec4 &, const ImVec4 &, const ImVec4 &) { customPages++; }
 static void gevrModsPage(unsigned, const ImVec4 &, const ImVec4 &, const ImVec4 &) { customPages++; }
+static void gevrDrawInlineLsPack(unsigned, const ImVec4 &, const ImVec4 &) {
+    ImGui::SameLine();
+    ImGui::SmallButton("Update Lasersword");
+    ImGui::SameLine();
+    ImGui::SmallButton("Remove Lasersword");
+}
+static void gevrDrawInlineLnPackBar(unsigned, const ImVec4 &, const ImVec4 &, const char *desc) {
+    ImGui::SmallButton("Update Pack");
+    ImGui::SameLine();
+    ImGui::SmallButton("Remove Pack");
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", desc);
+}
 // Play's LiveSplit row at its fullest: on, the longest address, the longest status
 int VrLiveSplit = 1;
 char VrLiveSplitHost[64] = "speedrun-pc.example.local";
@@ -191,6 +204,7 @@ int main() {
     // every row there is: ragdolls with dismemberment, body slots, the ally,
     // motion throw and force pull; an update to offer; Bean's 120 Hz warning
     VrRagdolls = VrDismemberment = 1; VrBodySlots = 1; VrAlly = 1;
+    VrLasersword = 1; VrRivalNpc = 1; VrNinjaNpc = 1;
     VrMotionThrowing = VrForcePull = 1; s_bean = 1; VrRefreshRate = 120; VrSpaceWarp = 0;
     upd.state = "available"; upd.offered = "0.5.15-test.99";
     upd.message = "Notes: a long line about what the update brings, longer than the row it shares with Update.";

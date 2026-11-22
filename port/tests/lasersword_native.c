@@ -6,47 +6,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void test_palette_and_gestures(void)
+static void test_palette_and_vr_core(void)
 {
+    assert(gevrIsQuestVrApk() == 0);
+    assert(gevrLsAvailable() == 0);
+
     for (int c = 0; c < GEVR_LS_COLOR_COUNT; c++) {
         unsigned int core = 0, glow = 0;
         gevrLsPalette(c, &core, &glow);
         assert((core & 0xFFu) == 0xFFu);
         assert((glow & 0xFFu) > 0u);
     }
-
-    GevrLsTrigger t;
-    gevrLsTriggerReset(&t);
-    assert(gevrLsTriggerUpdate(&t, 1, 0.016f) == GEVR_LS_TRIG_NONE);
-    assert(gevrLsTriggerUpdate(&t, 1, 0.050f) == GEVR_LS_TRIG_NONE);
-    assert(gevrLsTriggerUpdate(&t, 0, 0.016f) == GEVR_LS_TRIG_TAP);
-
-    assert(gevrLsTriggerUpdate(&t, 0, 0.35f) == GEVR_LS_TRIG_NONE);
-    assert(gevrLsTriggerUpdate(&t, 1, 0.016f) == GEVR_LS_TRIG_NONE);
-    assert(gevrLsTriggerUpdate(&t, 0, 0.016f) == GEVR_LS_TRIG_TAP);
-
-    assert(gevrLsTriggerUpdate(&t, 1, 0.05f) == GEVR_LS_TRIG_DOUBLE_TAP);
-    assert(gevrLsTriggerUpdate(&t, 1, 0.30f) == GEVR_LS_TRIG_NONE);
-    assert(gevrLsTriggerUpdate(&t, 0, 0.016f) == GEVR_LS_TRIG_NONE);
-
-    gevrLsTriggerReset(&t);
-    assert(gevrLsTriggerUpdate(&t, 1, 0.016f) == GEVR_LS_TRIG_NONE);
-    assert(gevrLsTriggerUpdate(&t, 1, 0.10f) == GEVR_LS_TRIG_NONE);
-    assert(gevrLsTriggerUpdate(&t, 1, 0.10f) == GEVR_LS_TRIG_NONE);
-    assert(gevrLsTriggerUpdate(&t, 1, 0.05f) == GEVR_LS_TRIG_HOLD_START);
-    assert(gevrLsTriggerUpdate(&t, 1, 0.05f) == GEVR_LS_TRIG_HOLD_ACTIVE);
-    assert(gevrLsTriggerUpdate(&t, 0, 0.016f) == GEVR_LS_TRIG_HOLD_RELEASE);
-
-    GevrLsSlash s = {0};
-    assert(gevrLsSlashStart(&s, 1) == 0);
-    assert(gevrLsSlashStart(&s, 0) == 1);
-    assert(s.dir == 0);
-    assert(gevrLsSlashStart(&s, 0) == 0);
-    assert(gevrLsSlashStep(&s, 0.13f) > 0.45f);
-    assert(gevrLsSlashStep(&s, 0.20f) == 1.0f);
-    assert(gevrLsSlashStep(&s, 0.016f) < 0.0f);
-    assert(gevrLsSlashStart(&s, 0) == 1);
-    assert(s.dir == 1);
 }
 
 static void test_wrist_ignition_and_throw(void)
@@ -97,12 +67,8 @@ static void test_block_deflect_and_blade_hit(void)
     assert(gevrLsBulletTravelToShooter(zeroVec, toShooter) == 0);
     assert(gevrLsBulletTravelToShooter(frontTravel, toShooter) == 1);
     assert(fabsf(toShooter[2] + 1.0f) < 1e-4f);
-    assert(gevrLsCheckBlock(0, fwd, toShooter, refl) == GEVR_LS_BLOCK_NONE);
-    assert(gevrLsCheckBlock(1, fwd, toShooter, refl) == GEVR_LS_BLOCK_DEFLECT);
-    assert(refl[2] < -0.9f);
-
     assert(gevrLsBulletTravelToShooter(rearTravel, toShooter) == 1);
-    assert(gevrLsCheckBlock(1, fwd, toShooter, refl) == GEVR_LS_BLOCK_NONE);
+    assert(fabsf(toShooter[2] - 1.0f) < 1e-4f);
 
     const float bladeAcross[3] = { 0.0f, 1.0f, 0.0f };
     const float bladeInline[3] = { 0.0f, 0.0f, -1.0f };
@@ -129,11 +95,6 @@ static void test_block_deflect_and_blade_hit(void)
     float bounce[3] = {0};
     gevrLsReflectVec(v, n, bounce);
     assert(fabsf(bounce[0] + 10.0f) < 1e-4f && fabsf(bounce[2] + 10.0f) < 1e-4f);
-
-    int rt = 0, lt = 0, mouse = 0;
-    gevrLsInputFeedFlat(1, 0, 1);
-    gevrLsInputReadFlat(&rt, &lt, &mouse);
-    assert(rt == 1 && lt == 0 && mouse == 1);
 }
 
 static void test_pack_and_audio(const char *packPath)
@@ -150,7 +111,8 @@ static void test_pack_and_audio(const char *packPath)
     for (int i = 0; i < 1024; i++) assert(buf[i] == 0);
 
     assert(gevrLsPackLoadFile(packPath) == 1);
-    assert(gevrLsAvailable() == 1);
+    /* Non-Quest hosts load explicitly via gevrLsPackLoadFile; gevrLsAvailable stays Quest-only */
+    assert(gevrLsAvailable() == 0);
     const GevrLsPack *pk = gevrLsPackGet();
     assert(pk && pk->loaded && pk->triCount >= 100 && pk->verts != NULL);
     assert(pk->emitterOffsetCm > 10.0f && pk->bladeRadiusCm > 0.5f);
@@ -194,7 +156,7 @@ static void test_pack_and_audio(const char *packPath)
 int main(int argc, char **argv)
 {
     assert(argc >= 2);
-    test_palette_and_gestures();
+    test_palette_and_vr_core();
     test_wrist_ignition_and_throw();
     test_block_deflect_and_blade_hit();
     test_pack_and_audio(argv[1]);

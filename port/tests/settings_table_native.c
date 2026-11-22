@@ -261,6 +261,11 @@ int main(void)
     }
     for (int s = 0; s < GEVR_LSEC_COUNT; s++)
         check(gevrSettingSectionRows(s, GEVR_SET_LAUNCHER, ids, 48) <= 14, "a launcher place fills at most two columns of seven");
+    s_questVr = 0;
+    check(!gevrSettingShown(find("Lasersword")), "lasersword hides on non-Quest builds");
+    check(!gevrSettingShown(find("Lasersword mode")), "lasersword mode hides on non-Quest builds");
+    check(!gevrSettingShown(find("Ninja mode")), "ninja mode hides on non-Quest builds");
+    s_questVr = 1;
     puts("PASS: settings table: every row round-trips, Reset, hidden and blocked rows, the host's online rules, "
          "the launcher's places and the ally, each section fits two columns, Reset all settings");
     return 0;

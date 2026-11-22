@@ -68,6 +68,8 @@ extern void musicTrack3ApplySeqpVol(unsigned short volume);
 extern void gevrSndApplySfxVolume(unsigned short volume);
 extern int gevrHatAvailable(void);
 extern int gevrLsAvailable(void);
+extern int gevrLnAvailable(void);
+extern int gevrIsQuestVrApk(void);
 extern int gevrBeanIsAvailable(void), gevrBeanIsEnabled(void);
 extern void gevrBeanSetEnabled(int on);
 extern int gevrTexpackFillAvailable(void);
@@ -141,6 +143,7 @@ typedef struct Row {
     int flat;                       /* a flat game's own (touch, gyro): hidden on the headset */
     int pad;                        /* a flat game's pad: hidden on the headset, shown on every flat game */
     int flatgame;                   /* a flat game's own (its window): hidden on the headset, shown on every flat game */
+    int questVr;                    /* Quest VR APK only: hidden on flat/mobile/frame/desktop builds */
 } Row;
 
 /* ---- the special cases (as options.c had them) ---- */
@@ -192,7 +195,12 @@ static int shownDismember(void) { return VrRagdolls && VrDismemberment; }
 static int shownRival(void) { return VrRivalNpc != 0; }
 static int shownRivalNormal(void) { return VrRivalNpc != 0 && VrLaserswordNinjaMode == 0; }
 static int shownNinjaNormal(void) { return VrNinjaNpc != 0 && VrLaserswordNinjaMode == 0; }
-static const char *blockedLaserswordAlly(void) { return VrAlly ? NULL : "Needs AI ally"; }
+static const char *blockedLaserswordNinja(void) { return gevrLnAvailable() ? NULL : "Get it in Mods"; }
+static const char *blockedLaserswordAlly(void)
+{
+    if (!gevrLnAvailable()) return "Get it in Mods";
+    return VrAlly ? NULL : "Needs AI ally";
+}
 static int laserswordModeGet(void) { return VrLaserswordNinjaMode == 1 ? 1 : 0; }
 static void laserswordModeSet(int on)
 {
@@ -719,76 +727,76 @@ static const Row s_rows[] = {
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .where = GEVR_SET_INGAME, .ivar = &VrBloodPatch, .def = NAN },
     { .label = "Oddjob's hat", .tooltip = "Oddjob's hat in place of the throwing knife.", .kind = GEVR_SET_TOGGLE,
       .section = GEVR_SEC_MODS, .where = GEVR_SET_INGAME, .ivar = &VrOddjobHat, .def = NAN, .blocked = blockedHat },
-    { .label = "Lasersword", .tooltip = "Adds a Lasersword melee weapon with deflection, throwing and dismemberment.", .kind = GEVR_SET_TOGGLE,
+    { .label = "Lasersword", .headset = 1, .questVr = 1, .tooltip = "Adds a Lasersword melee weapon with deflection, throwing and dismemberment.", .kind = GEVR_SET_TOGGLE,
       .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLasersword, .def = NAN, .blocked = blockedLasersword },
-    { .label = "  NPC laser shots", .tooltip = "Enemy guns and turrets fire visible GoldenEye laser bolts.", .kind = GEVR_SET_TOGGLE,
+    { .label = "  NPC laser shots", .headset = 1, .questVr = 1, .tooltip = "Enemy guns and turrets fire visible GoldenEye laser bolts.", .kind = GEVR_SET_TOGGLE,
       .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLaserswordNpcLasers,
       .def = NAN, .shown = shownLasersword },
 
-    /* Lasersword menu (GEVR_SEC_MODS / Rules > Lasersword; mutually exclusive with Ninja mode) */
-    { .label = "Lasersword mode", .tooltip = "Lasersword, Force powers and rival duelists. Enabling turns Ninja mode off and activates ragdolls/dismemberment.",
+    /* Lasersword menu (GEVR_SEC_MODS / Rules > Lasersword; mutually exclusive with Ninja mode; Quest VR APK only) */
+    { .label = "Lasersword mode", .headset = 1, .questVr = 1, .tooltip = "Lasersword, Force powers and rival duelists. Enabling turns Ninja mode off and activates ragdolls/dismemberment.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .def = NAN,
-      .cpositions = twoPositions, .cget = laserswordModeGet, .cset = laserswordModeSet, .ctext = onOffText, .cdefault = 0 },
-    { .label = "Blade style", .tooltip = "Single blade, double-bladed staff, or dual laserswords in both hands.",
+      .blocked = blockedLaserswordNinja, .cpositions = twoPositions, .cget = laserswordModeGet, .cset = laserswordModeSet, .ctext = onOffText, .cdefault = 0 },
+    { .label = "Blade style", .headset = 1, .questVr = 1, .tooltip = "Single blade, double-bladed staff, or dual laserswords in both hands.",
       .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordStyle,
       .ivalues = s_three, .names = s_lnStyleNames, .count = 3, .def = NAN },
-    { .label = "Blade colour", .tooltip = "Your lasersword blade colour.",
+    { .label = "Blade colour", .headset = 1, .questVr = 1, .tooltip = "Your lasersword blade colour.",
       .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordColor,
       .ivalues = s_eight, .names = s_lnColorNames, .count = 8, .def = NAN },
-    { .label = "Sword hand", .tooltip = "Which hand holds the primary lasersword (Force powers on the opposite hand).",
+    { .label = "Sword hand", .headset = 1, .questVr = 1, .tooltip = "Which hand holds the primary lasersword (Force powers on the opposite hand).",
       .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordHand,
       .ivalues = s_two, .names = s_lnHandNames, .count = 2, .def = NAN },
-    { .label = "Force powers", .tooltip = "Force Grab/Choke, Pull, Push and Lightning on the opposite hand.",
+    { .label = "Force powers", .headset = 1, .questVr = 1, .tooltip = "Force Grab/Choke, Pull, Push and Lightning on the opposite hand.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordForcePowers, .def = NAN },
-    { .label = "Catch rockets", .tooltip = "Force Pull and Push catch or reflect flying rockets and grenades.",
+    { .label = "Catch rockets", .headset = 1, .questVr = 1, .tooltip = "Force Pull and Push catch or reflect flying rockets and grenades.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordCatchProjectiles, .def = NAN },
-    { .label = "Perfect parry", .tooltip = "Timed block crits on deflected shots and triggers enemy blade locks.",
+    { .label = "Perfect parry", .headset = 1, .questVr = 1, .tooltip = "Timed block crits on deflected shots and triggers enemy blade locks.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLnPerfectParry, .def = NAN },
-    { .label = "Blade trails", .tooltip = "Swept motion ribbons and sparks when dragging blades across walls.",
+    { .label = "Blade trails", .headset = 1, .questVr = 1, .tooltip = "Swept motion ribbons and sparks when dragging blades across walls.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLnBladeTrails, .def = NAN },
-    { .label = "Custom SFX", .tooltip = "Procedural lasersword hum, Doppler swings, clashes and Force sound effects.",
+    { .label = "Custom SFX", .headset = 1, .questVr = 1, .tooltip = "Pack lasersword hum, Doppler swings, clashes and Force sound effects.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLnAudio, .def = NAN },
-    { .label = "Laser guns", .tooltip = "NPCs fire visible GoldenEye laser bolts and you start with GoldenEye's Moonraker Laser equipped.",
+    { .label = "Laser guns", .headset = 1, .questVr = 1, .tooltip = "NPCs fire visible GoldenEye laser bolts and you start with GoldenEye's Moonraker Laser equipped.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordLasers, .def = NAN },
-    { .label = "Pick up guns", .tooltip = "Allow picking up dropped guns and ammo in Lasersword mode (keycards, armour and gadgets always work).",
+    { .label = "Pick up guns", .headset = 1, .questVr = 1, .tooltip = "Allow picking up dropped guns and ammo in Lasersword mode (keycards, armour and gadgets always work).",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrLaserswordPickupGuns, .def = NAN },
-    { .label = "Rival NPCs", .tooltip = "Spawn red-lasersword rival enemies with Force powers and high speed/health.",
+    { .label = "Rival NPCs", .headset = 1, .questVr = 1, .tooltip = "Spawn red-lasersword rival enemies with Force powers and high speed/health.",
       .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrRivalNpc,
-      .ivalues = s_three, .names = s_lnNpcNames, .count = 3, .def = NAN },
-    { .label = "  Rival size", .tooltip = "Height scale of spawned rival NPCs.",
+      .ivalues = s_three, .names = s_lnNpcNames, .count = 3, .def = NAN, .blocked = blockedLaserswordNinja },
+    { .label = "  Rival size", .headset = 1, .questVr = 1, .tooltip = "Height scale of spawned rival NPCs.",
       .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrRivalScale,
       .ivalues = s_four, .names = s_lnScaleNames, .count = 4, .def = NAN, .shown = shownRival },
-    { .label = "  Rivals in normal", .tooltip = "Allow rival NPCs to spawn even in normal Bond missions.",
+    { .label = "  Rivals in normal", .headset = 1, .questVr = 1, .tooltip = "Allow rival NPCs to spawn even in normal Bond missions.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrRivalInNormalMode,
       .def = NAN, .shown = shownRivalNormal },
-    { .label = "Lasersword ally", .tooltip = "Equips your AI ally with a lasersword and Force powers.",
+    { .label = "Lasersword ally", .headset = 1, .questVr = 1, .tooltip = "Equips your AI ally with a lasersword and Force powers.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_LASERSWORD), .where = GEVR_SET_LAUNCHER, .ivar = &VrAllyLasersword,
       .def = NAN, .blocked = blockedLaserswordAlly },
 
-    /* Ninja menu (GEVR_SEC_MODS / Rules > Ninja; mutually exclusive with Lasersword mode) */
-    { .label = "Ninja mode", .tooltip = "Katana, boomerangs, shield and Shadow-Step. Enabling turns Lasersword mode off and activates ragdolls/dismemberment.",
+    /* Ninja menu (GEVR_SEC_MODS / Rules > Ninja; mutually exclusive with Lasersword mode; Quest VR APK only) */
+    { .label = "Ninja mode", .headset = 1, .questVr = 1, .tooltip = "Katana, boomerangs, shield and Shadow-Step. Enabling turns Lasersword mode off and activates ragdolls/dismemberment.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .def = NAN,
-      .cpositions = twoPositions, .cget = ninjaModeGet, .cset = ninjaModeSet, .ctext = onOffText, .cdefault = 0 },
-    { .label = "Ninja sword", .tooltip = "Blade style in Ninja mode (short blades need closer range; dual adds an off-hand blade).",
+      .blocked = blockedLaserswordNinja, .cpositions = twoPositions, .cget = ninjaModeGet, .cset = ninjaModeSet, .ctext = onOffText, .cdefault = 0 },
+    { .label = "Ninja sword", .headset = 1, .questVr = 1, .tooltip = "Blade style in Ninja mode (short blades need closer range; dual adds an off-hand blade).",
       .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaSword,
       .ivalues = s_six, .names = s_lnSwordNames, .count = 6, .def = NAN },
-    { .label = "Boomerang", .tooltip = "Spinning throwing blade style in Ninja mode.",
+    { .label = "Boomerang", .headset = 1, .questVr = 1, .tooltip = "Spinning throwing blade style in Ninja mode.",
       .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaBoomerang,
       .ivalues = s_four, .names = s_lnBoomNames, .count = 4, .def = NAN },
-    { .label = "Ninja shield", .tooltip = "Carry an off-hand shield to deflect bullets back at shooters.",
+    { .label = "Ninja shield", .headset = 1, .questVr = 1, .tooltip = "Carry an off-hand shield to deflect bullets back at shooters.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaShield, .def = NAN },
-    { .label = "Wall ricochet", .tooltip = "Thrown boomerangs bounce cleanly off walls and corridors before returning.",
+    { .label = "Wall ricochet", .headset = 1, .questVr = 1, .tooltip = "Thrown boomerangs bounce cleanly off walls and corridors before returning.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaRicochet, .def = NAN },
-    { .label = "Shadow-Step", .tooltip = "Double-tap LT or use the SHADOW wheel slot for a smoke bomb speed burst.",
+    { .label = "Shadow-Step", .headset = 1, .questVr = 1, .tooltip = "Use the SHADOW wheel slot or off-hand whip for a smoke bomb speed burst.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaShadowStep, .def = NAN },
-    { .label = "Bullet slice", .tooltip = "Slashing through incoming gunfire slices bullets out of the air.",
+    { .label = "Bullet slice", .headset = 1, .questVr = 1, .tooltip = "Slashing through incoming gunfire slices bullets out of the air.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaBulletSlice, .def = NAN },
-    { .label = "Pick up guns", .tooltip = "Allow picking up dropped guns and ammo in Ninja mode (keycards, armour and gadgets always work).",
+    { .label = "Pick up guns", .headset = 1, .questVr = 1, .tooltip = "Allow picking up dropped guns and ammo in Ninja mode (keycards, armour and gadgets always work).",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaPickupGuns, .def = NAN },
-    { .label = "Evil Ninjas", .tooltip = "Spawn sword-and-boomerang Evil Ninja enemies.",
+    { .label = "Evil Ninjas", .headset = 1, .questVr = 1, .tooltip = "Spawn sword-and-boomerang Evil Ninja enemies.",
       .kind = GEVR_SET_CHOICE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaNpc,
-      .ivalues = s_three, .names = s_lnNpcNames, .count = 3, .def = NAN },
-    { .label = "  Ninjas in normal", .tooltip = "Allow Evil Ninja NPCs to spawn even in normal Bond missions.",
+      .ivalues = s_three, .names = s_lnNpcNames, .count = 3, .def = NAN, .blocked = blockedLaserswordNinja },
+    { .label = "  Ninjas in normal", .headset = 1, .questVr = 1, .tooltip = "Allow Evil Ninja NPCs to spawn even in normal Bond missions.",
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_NINJA), .where = GEVR_SET_LAUNCHER, .ivar = &VrNinjaInNormalMode,
       .def = NAN, .shown = shownNinjaNormal },
 
@@ -888,6 +896,7 @@ int gevrSettingShown(int id)
 #else
     if (r && (r->flat || r->pad || r->flatgame)) return 0;   /* touch, gyro, a pad and the window: a flat game's */
 #endif
+    if (r && r->questVr && !gevrIsQuestVrApk()) return 0;
     return r && (!r->shown || r->shown());
 }
 
