@@ -7065,7 +7065,8 @@ s32 objTick(struct PropRecord *prop)
 #ifdef GEVR
 						{
 							extern s32 gevrLnLasersActive(void);
-							if (gevrLnLasersActive())
+							extern s32 gevrLsNpcLasersActive(void);
+							if (gevrLnLasersActive() || gevrLsNpcLasersActive())
 							{
 								beam_local->weaponnum = ITEM_LASER;
 							}

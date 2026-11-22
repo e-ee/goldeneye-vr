@@ -830,6 +830,7 @@ Gfx *sub_GAME_7F0B3C8C(Gfx *gdl)
     gdl = fogRenderClearFogMode(gdl);
     gdl = gevrRagdollRender(gdl);
     { extern Gfx *gevrLnDrawWorld(Gfx *gdl); gdl = gevrLnDrawWorld(gdl); }
+    { extern Gfx *gevrLsDrawWorld(Gfx *gdl); gdl = gevrLsDrawWorld(gdl); }
 #endif
     gdl = bgScissorCurrentPlayerViewDefault(fogRenderClearFogMode(gdl));
     gSPMatrix(gdl++, osVirtualToPhysical((void*)get_BONDdata_field_10E0()), (G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_PROJECTION));

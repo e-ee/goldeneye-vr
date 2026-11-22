@@ -49,6 +49,7 @@ extern int VrNinjaShield, VrNinjaRicochet, VrNinjaShadowStep, VrNinjaBulletSlice
 extern int VrRivalNpc, VrRivalInNormalMode, VrRivalScale, VrNinjaNpc, VrNinjaInNormalMode;
 extern int VrAllyLasersword;
 extern int VrLaserswordLasers, VrLaserswordPickupGuns, VrNinjaPickupGuns;
+extern int VrLasersword, VrLaserswordNpcLasers;
 extern int VrRagdolls;
 extern int VrDismemberment;
 extern float VrDismemberDamage;

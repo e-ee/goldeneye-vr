@@ -9,6 +9,7 @@
 #include "gevr_gexweapon.h"
 #include "gevr_bodyslot.h"
 #include "gevr_lasersword_ninja.h"
+#include "gevr_lasersword.h"
 #endif
 #include <string.h>
 #include <stddef.h>
@@ -2370,7 +2371,9 @@ s32 inputReadController(s32 idx, OSContPad *npad)
 #endif
                 const bool rtNow = padRt || mouseRt || flatTouchFire;
                 const bool ltNow = padLt || mouseLt || flatTouchAim;
-                gevrLnInputFeedFlat(rtNow ? 1 : 0, ltNow ? 1 : 0, (mouseRt || mouseLt) && !(padRt || padLt || flatTouchFire || flatTouchAim) ? 1 : 0);
+                const int flatIsMouse = (mouseRt || mouseLt) && !(padRt || padLt || flatTouchFire || flatTouchAim) ? 1 : 0;
+                gevrLnInputFeedFlat(rtNow ? 1 : 0, ltNow ? 1 : 0, flatIsMouse);
+                gevrLsInputFeedFlat(rtNow ? 1 : 0, ltNow ? 1 : 0, flatIsMouse);
 
                 if (VrLaserswordNinjaMode) {
                     if (wheelBtn) {
@@ -2424,12 +2427,14 @@ s32 inputReadController(s32 idx, OSContPad *npad)
                 }
                 {
                     extern s32 gevrLnSuppressNormalFire(void);
-                    if (gevrLnSuppressNormalFire()) {
+                    extern s32 gevrLsHandActive(s32 hand);
+                    if (gevrLnSuppressNormalFire() || gevrLsHandActive(GUNRIGHT)) {
                         npad->button &= ~(Z_TRIG | R_TRIG);
                     }
                 }
             } else {
                 gevrLnInputFeedFlat(0, 0, 0);
+                gevrLsInputFeedFlat(0, 0, 0);
                 if (s_flatWheelWas) {
                     gevrWeaponPanelOpen = 0;
                     gevrWeaponPanelRelease = 0;
@@ -3482,10 +3487,17 @@ s32 inputReadController(s32 idx, OSContPad *npad)
     if (!gevrNativePauseOpen() && !gevrWeaponPanelOpen
         && g_CurrentPlayer && !g_CurrentPlayer->mpmenuon && bossGetStageNum() != LEVELID_TITLE) {
         extern s32 gevrLnSuppressNormalFire(void);
+        extern s32 gevrLsHandActive(s32 hand);
         if (gevrLnSuppressNormalFire()) {
             npad->button &= ~Z_TRIG;
             gevrVrTriggerDown[0] = 0;
             gevrVrTriggerDown[1] = 0;
+        } else {
+            const int activeR = gevrLsHandActive(GUNRIGHT) != 0;
+            const int activeL = gevrLsHandActive(GUNLEFT) != 0;
+            if (activeL) gevrVrTriggerDown[0] = 0;
+            if (activeR) gevrVrTriggerDown[1] = 0;
+            if (activeR && !gevrVrTriggerDown[0]) npad->button &= ~Z_TRIG;
         }
     }
     if (npad->button != 0 || npad->stick_x != 0 || npad->stick_y != 0 || npad->rstick_x != 0 || npad->rstick_y != 0) {

@@ -398,6 +398,7 @@ list(FILTER SRC_PORT EXCLUDE REGEX "port/src/(romdata|mod)\.c$")
 # src/game/gevr_ally.c added 2026-10-17 (refresh the game source glob).
 # port/src/gevr_pull.c, src/game/gevr_forcepull.c added 2026-11-05 (force pull).
 # port/src/gevr_lasersword_ninja.c & src/game/gevr_lasersword_ninja_game.c added 2026-11-21 (Lasersword and Ninja modes, #270; touching refreshes glob).
+# port/src/gevr_lasersword.c & src/game/gevr_lasersword_game.c added 2026-11-21 (Lasersword weapon mod; touching refreshes glob).
 # src/game/gevr_thirdperson.c added 2026-11-05 (third person, #230).
 # port/src/gevr_disarm.c, src/game/gevr_disarmed.c added 2026-11-06 (disarmed guards).
 # src/game/gevr_speedrun.c added 2026-11-11 (speedrun timer).

@@ -51,6 +51,7 @@ extern int VrNinjaShield, VrNinjaRicochet, VrNinjaShadowStep, VrNinjaBulletSlice
 extern int VrRivalNpc, VrRivalInNormalMode, VrRivalScale, VrNinjaNpc, VrNinjaInNormalMode;
 extern int VrAllyLasersword;
 extern int VrLaserswordLasers, VrLaserswordPickupGuns, VrNinjaPickupGuns;
+extern int VrLasersword, VrLaserswordNpcLasers;
 extern int VrEyeMsaa;
 extern int VrPlayMode, VrBodySlotShow, VrCampaign;
 extern int VrAlly, VrAllyWeapon, VrAllyAggression, VrAllyHealth, VrAllyDamage, VrAllyInvincible;
@@ -422,6 +423,8 @@ static const char *const s_allyGunNames[] = { "PP7", "Silenced PP7", "DD44", "KF
                                               "ZMG", "AR33", "RC-P90", "Shotgun", "Automatic shotgun" };
 static const char *const s_allyMoodNames[] = { "Cautious", "Normal", "Aggressive" };
 
+static int shownLasersword(void) { return VrLasersword != 0; }
+
 #define L(x) ((x) + 1)   /* a row's launcher place, when not its section's */
 
 /* Fun (the host's; online the match's, live, and the host's only) */
@@ -714,6 +717,11 @@ static const Row s_rows[] = {
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .where = GEVR_SET_INGAME, .ivar = &VrBloodPatch, .def = NAN },
     { .label = "Oddjob's hat", .tooltip = "Oddjob's hat in place of the throwing knife.", .kind = GEVR_SET_TOGGLE,
       .section = GEVR_SEC_MODS, .where = GEVR_SET_INGAME, .ivar = &VrOddjobHat, .def = NAN, .blocked = blockedHat },
+    { .label = "Lasersword", .tooltip = "Adds a Lasersword melee weapon with deflection, throwing and dismemberment.", .kind = GEVR_SET_TOGGLE,
+      .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLasersword, .def = NAN },
+    { .label = "  NPC laser shots", .tooltip = "Enemy guns and turrets fire visible GoldenEye laser bolts.", .kind = GEVR_SET_TOGGLE,
+      .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLaserswordNpcLasers,
+      .def = NAN, .shown = shownLasersword },
 
     /* Lasersword menu (GEVR_SEC_MODS / Rules > Lasersword; mutually exclusive with Ninja mode) */
     { .label = "Lasersword mode", .tooltip = "Lasersword, Force powers and rival duelists. Enabling turns Ninja mode off and activates ragdolls/dismemberment.",

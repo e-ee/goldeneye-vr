@@ -445,8 +445,8 @@ extern "C" void vrSettingsSave(void)
     iniPrintf(f, "BloodPatch=%d\n", VrBloodPatch ? 1 : 0);
     iniPrintf(f, "; 1 = Oddjob's hat in place of the throwing knife, from files/mods/oddjob_hat.bin.\n");
     iniPrintf(f, "OddjobHat=%d\n", VrOddjobHat ? 1 : 0);
-    iniPrintf(f, "LaserswordNinjaMode=%d\nLaserswordHand=%d\nLaserswordColor=%d\nLaserswordStyle=%d\nNinjaSword=%d\nNinjaBoomerang=%d\n",
-            VrLaserswordNinjaMode, VrLaserswordHand, VrLaserswordColor, VrLaserswordStyle, VrNinjaSword, VrNinjaBoomerang);
+    iniPrintf(f, "LaserswordNinjaMode=%d\nLaserswordHand=%d\nLaserswordStyle=%d\nNinjaSword=%d\nNinjaBoomerang=%d\n",
+            VrLaserswordNinjaMode, VrLaserswordHand, VrLaserswordStyle, VrNinjaSword, VrNinjaBoomerang);
     iniPrintf(f, "LaserswordForcePowers=%d\nLaserswordCatchProjectiles=%d\nLnPerfectParry=%d\nLnBladeTrails=%d\nLnAudio=%d\n",
             VrLaserswordForcePowers ? 1 : 0, VrLaserswordCatchProjectiles ? 1 : 0, VrLnPerfectParry ? 1 : 0,
             VrLnBladeTrails ? 1 : 0, VrLnAudio ? 1 : 0);
@@ -457,6 +457,8 @@ extern "C" void vrSettingsSave(void)
     iniPrintf(f, "AllyLasersword=%d\n", VrAllyLasersword ? 1 : 0);
     iniPrintf(f, "LaserswordLasers=%d\nLaserswordPickupGuns=%d\nNinjaPickupGuns=%d\n",
             VrLaserswordLasers ? 1 : 0, VrLaserswordPickupGuns ? 1 : 0, VrNinjaPickupGuns ? 1 : 0);
+    iniPrintf(f, "Lasersword=%d\nLaserswordColor=%d\nLaserswordNpcLasers=%d\n",
+              VrLasersword ? 1 : 0, VrLaserswordColor, VrLaserswordNpcLasers ? 1 : 0);
     iniPrintf(f, "Ragdolls=%d\n", VrRagdolls ? 1 : 0);
     iniPrintf(f, "Dismemberment=%d\n", VrDismemberment ? 1 : 0);
     iniPrintf(f, "DismemberDamage=%.1f\n", VrDismemberDamage);
@@ -1030,7 +1032,6 @@ extern "C" void vrSettingsLoad(void)
             else if (strcmp(key, "OddjobHat") == 0) VrOddjobHat = ival != 0;
             else if (strcmp(key, "LaserswordNinjaMode") == 0) VrLaserswordNinjaMode = ival < 0 ? 0 : ival > 2 ? 2 : ival;
             else if (strcmp(key, "LaserswordHand") == 0) VrLaserswordHand = ival != 0;
-            else if (strcmp(key, "LaserswordColor") == 0) VrLaserswordColor = ival < 0 ? 0 : ival > 7 ? 7 : ival;
             else if (strcmp(key, "LaserswordStyle") == 0) VrLaserswordStyle = ival < 0 ? 0 : ival > 2 ? 2 : ival;
             else if (strcmp(key, "LaserswordForcePowers") == 0) VrLaserswordForcePowers = ival != 0;
             else if (strcmp(key, "LaserswordCatchProjectiles") == 0) VrLaserswordCatchProjectiles = ival != 0;
@@ -1052,6 +1053,9 @@ extern "C" void vrSettingsLoad(void)
             else if (strcmp(key, "LaserswordLasers") == 0) VrLaserswordLasers = ival != 0;
             else if (strcmp(key, "LaserswordPickupGuns") == 0) VrLaserswordPickupGuns = ival != 0;
             else if (strcmp(key, "NinjaPickupGuns") == 0) VrNinjaPickupGuns = ival != 0;
+            else if (strcmp(key, "Lasersword") == 0) VrLasersword = ival != 0;
+            else if (strcmp(key, "LaserswordColor") == 0) VrLaserswordColor = ival < 0 ? 0 : ival > 7 ? 7 : ival;
+            else if (strcmp(key, "LaserswordNpcLasers") == 0) VrLaserswordNpcLasers = ival != 0;
             else if (strcmp(key, "Ragdolls") == 0) VrRagdolls = ival != 0;
             else if (strcmp(key, "Dismemberment") == 0) VrDismemberment = ival != 0;
             else if (strcmp(key, "DismemberChance") == 0) VrDismemberChance = ival < 0 ? 0 : ival > 100 ? 100 : ival;

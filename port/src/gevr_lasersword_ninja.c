@@ -1,4 +1,5 @@
 #include "gevr_lasersword_ninja.h"
+#include "gevr_lasersword.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -32,29 +33,7 @@ static float lnDot3(const float a[3], const float b[3])
 
 void gevrLnLaserswordPalette(int color, unsigned int *coreRgba, unsigned int *glowRgba)
 {
-    static const unsigned int kCore[GEVR_LN_COLOR_COUNT] = {
-        0xE8F6FFFF, /* blue */
-        0xEAFFE8FF, /* green */
-        0xFFEAEAFF, /* red */
-        0xF6E8FFFF, /* purple */
-        0xFFFFE8FF, /* yellow */
-        0xFFFFFFFF, /* white */
-        0xFFF2E6FF, /* orange */
-        0xFFF8E0FF, /* gold */
-    };
-    static const unsigned int kGlow[GEVR_LN_COLOR_COUNT] = {
-        0x2890FFE8, /* blue */
-        0x28FF50E8, /* green */
-        0xFF2828E8, /* red */
-        0xB038FFE8, /* purple */
-        0xFFE620E8, /* yellow */
-        0xD8E8FFE8, /* white */
-        0xFF7018E8, /* orange */
-        0xFFD030E8, /* gold */
-    };
-    const int idx = (color >= 0 && color < GEVR_LN_COLOR_COUNT) ? color : GEVR_LN_COLOR_BLUE;
-    if (coreRgba) *coreRgba = kCore[idx];
-    if (glowRgba) *glowRgba = kGlow[idx];
+    gevrLsPalette(color, coreRgba, glowRgba);
 }
 
 float gevrLnWeaponReachCm(int mode, int sword)
@@ -113,107 +92,73 @@ float gevrLnRivalScaleFactor(int setting, unsigned int seed)
 
 void gevrLnTriggerReset(GevrLnTrigger *t)
 {
+    GevrLsTrigger ls;
     if (!t) return;
-    memset(t, 0, sizeof(*t));
+    gevrLsTriggerReset(&ls);
+    t->down = ls.down;
+    t->heldSec = ls.heldSec;
+    t->holdFired = ls.holdFired;
+    t->tapTimer = ls.tapTimer;
+    t->pendingTap = ls.pendingTap;
 }
 
 int gevrLnTriggerUpdate(GevrLnTrigger *t, int pressed, float dt)
 {
+    GevrLsTrigger ls;
     if (!t) return GEVR_LN_TRIG_NONE;
-    if (dt < 0.0f) dt = 0.0f;
-
-    if (t->tapTimer > 0.0f) {
-        t->tapTimer -= dt;
-        if (t->tapTimer <= 0.0f) {
-            t->tapTimer = 0.0f;
-            t->pendingTap = 0;
-        }
-    }
-
-    if (pressed && !t->down) {
-        t->down = 1;
-        t->heldSec = 0.0f;
-        if (t->pendingTap && t->tapTimer > 0.0f) {
-            t->pendingTap = 0;
-            t->tapTimer = 0.0f;
-            t->holdFired = 2; /* suppress release tap/hold after double-tap */
-            return GEVR_LN_TRIG_DOUBLE_TAP;
-        }
-        t->holdFired = 0;
-        return GEVR_LN_TRIG_NONE;
-    }
-
-    if (pressed && t->down) {
-        if (t->holdFired == 2) {
-            return GEVR_LN_TRIG_NONE;
-        }
-        t->heldSec += dt;
-        if (t->holdFired == 0 && t->heldSec >= GEVR_LN_HOLD_SEC) {
-            t->holdFired = 1;
-            t->pendingTap = 0;
-            t->tapTimer = 0.0f;
-            return GEVR_LN_TRIG_HOLD_START;
-        }
-        if (t->holdFired == 1) {
-            return GEVR_LN_TRIG_HOLD_ACTIVE;
-        }
-        return GEVR_LN_TRIG_NONE;
-    }
-
-    if (!pressed && t->down) {
-        const int wasHold = t->holdFired;
-        t->down = 0;
-        t->heldSec = 0.0f;
-        t->holdFired = 0;
-        if (wasHold == 1) {
-            return GEVR_LN_TRIG_HOLD_RELEASE;
-        }
-        if (wasHold == 2) {
-            return GEVR_LN_TRIG_NONE;
-        }
-        t->pendingTap = 1;
-        t->tapTimer = GEVR_LN_DOUBLETAP_SEC;
-        return GEVR_LN_TRIG_TAP;
-    }
-
-    return GEVR_LN_TRIG_NONE;
+    ls.down = t->down;
+    ls.heldSec = t->heldSec;
+    ls.holdFired = t->holdFired;
+    ls.tapTimer = t->tapTimer;
+    ls.pendingTap = t->pendingTap;
+    const int ev = gevrLsTriggerUpdate(&ls, pressed, dt);
+    t->down = ls.down;
+    t->heldSec = ls.heldSec;
+    t->holdFired = ls.holdFired;
+    t->tapTimer = ls.tapTimer;
+    t->pendingTap = ls.pendingTap;
+    return ev;
 }
 
 int gevrLnSlashStart(GevrLnSlash *s, int blocking)
 {
-    if (!s || blocking || s->active) {
-        return 0;
-    }
-    s->active = 1;
-    s->dir = s->nextSide ? 1 : 0;
-    s->nextSide = !s->dir;
-    s->t = 0.0f;
-    s->duration = GEVR_LN_SLASH_SEC;
-    return 1;
+    GevrLsSlash ls;
+    if (!s) return 0;
+    ls.nextSide = s->nextSide;
+    ls.active = s->active;
+    ls.dir = s->dir;
+    ls.t = s->t;
+    ls.duration = s->duration;
+    const int started = gevrLsSlashStart(&ls, blocking);
+    s->nextSide = ls.nextSide;
+    s->active = ls.active;
+    s->dir = ls.dir;
+    s->t = ls.t;
+    s->duration = ls.duration;
+    return started;
 }
 
 float gevrLnSlashStep(GevrLnSlash *s, float dt)
 {
-    if (!s || !s->active) {
-        return -1.0f;
-    }
-    if (dt < 0.0f) dt = 0.0f;
-    if (s->duration <= 0.0f) s->duration = GEVR_LN_SLASH_SEC;
-    s->t += dt;
-    if (s->t >= s->duration) {
-        s->active = 0;
-        s->t = 0.0f;
-        return 1.0f;
-    }
-    return s->t / s->duration;
+    GevrLsSlash ls;
+    if (!s) return -1.0f;
+    ls.nextSide = s->nextSide;
+    ls.active = s->active;
+    ls.dir = s->dir;
+    ls.t = s->t;
+    ls.duration = s->duration;
+    const float phase = gevrLsSlashStep(&ls, dt);
+    s->nextSide = ls.nextSide;
+    s->active = ls.active;
+    s->dir = ls.dir;
+    s->t = ls.t;
+    s->duration = ls.duration;
+    return phase;
 }
 
 int gevrLnVrWristThrow(const float handVelCmS[3], const float aimFwd[3], int releasedFromHold)
 {
-    float dir[3];
-    if (!releasedFromHold || !handVelCmS || !aimFwd) return 0;
-    if (lnNormalize3(aimFwd, dir) <= 0.0f) return 0;
-    return lnDot3(handVelCmS, dir) >= 180.0f;
+    return gevrLsVrWristThrow(handVelCmS, aimFwd, releasedFromHold);
 }
 
 int gevrLnVrWristPull(const float handVelCmS[3], const float aimFwd[3], int triggerHeld)
@@ -457,13 +402,7 @@ int gevrLnCheckBlock(int mode, int blocking, int hasNinjaShield,
 
 int gevrLnBulletTravelToShooter(const float bulletTravel[3], float outToShooter[3])
 {
-    float dir[3];
-    if (!bulletTravel || !outToShooter) return 0;
-    if (lnNormalize3(bulletTravel, dir) <= 0.0f) return 0;
-    outToShooter[0] = -dir[0];
-    outToShooter[1] = -dir[1];
-    outToShooter[2] = -dir[2];
-    return 1;
+    return gevrLsBulletTravelToShooter(bulletTravel, outToShooter);
 }
 
 int gevrLnCheckVrBladeBlock(int mode, int blocking, int hasNinjaShield,
@@ -524,50 +463,7 @@ int gevrLnSegmentHitCylinder(const float segA[3], const float segB[3],
                              const float cylBase[3], float cylRadius, float cylHeight,
                              float outHitPt[3])
 {
-    if (!segA || !segB || !cylBase || cylRadius <= 0.0f || cylHeight <= 0.0f) {
-        return 0;
-    }
-    const float yLo = cylBase[1] - 12.0f;
-    const float yHi = cylBase[1] + cylHeight + 12.0f;
-    const float dy = segB[1] - segA[1];
-    float tMin = 0.0f;
-    float tMax = 1.0f;
-
-    if (fabsf(dy) < 1e-6f) {
-        if (segA[1] < yLo || segA[1] > yHi) return 0;
-    } else {
-        float t0 = (yLo - segA[1]) / dy;
-        float t1 = (yHi - segA[1]) / dy;
-        if (t0 > t1) { float tmp = t0; t0 = t1; t1 = tmp; }
-        if (t0 > tMin) tMin = t0;
-        if (t1 < tMax) tMax = t1;
-        if (tMin > tMax) return 0;
-    }
-
-    const float dx = segB[0] - segA[0];
-    const float dz = segB[2] - segA[2];
-    const float len2xz = dx * dx + dz * dz;
-    float t = 0.5f * (tMin + tMax);
-    if (len2xz > 1e-8f) {
-        t = ((cylBase[0] - segA[0]) * dx + (cylBase[2] - segA[2]) * dz) / len2xz;
-        if (t < tMin) t = tMin;
-        if (t > tMax) t = tMax;
-    }
-
-    const float hx = segA[0] + dx * t;
-    const float hy = segA[1] + dy * t;
-    const float hz = segA[2] + dz * t;
-    const float ex = hx - cylBase[0];
-    const float ez = hz - cylBase[2];
-    if (ex * ex + ez * ez > cylRadius * cylRadius) {
-        return 0;
-    }
-    if (outHitPt) {
-        outHitPt[0] = hx;
-        outHitPt[1] = hy;
-        outHitPt[2] = hz;
-    }
-    return 1;
+    return gevrLsSegmentHitCylinder(segA, segB, cylBase, cylRadius, cylHeight, outHitPt);
 }
 
 static int s_lnFlatRtDown;
@@ -590,18 +486,7 @@ void gevrLnInputReadFlat(int *rtDown, int *ltDown, int *isMouse)
 
 void gevrLnReflectVec(const float v[3], const float n[3], float out[3])
 {
-    float nn[3];
-    if (!v || !n || !out) return;
-    if (lnNormalize3(n, nn) <= 0.0f) {
-        out[0] = -v[0];
-        out[1] = -v[1];
-        out[2] = -v[2];
-        return;
-    }
-    const float d = 2.0f * lnDot3(v, nn);
-    out[0] = v[0] - d * nn[0];
-    out[1] = v[1] - d * nn[1];
-    out[2] = v[2] - d * nn[2];
+    gevrLsReflectVec(v, n, out);
 }
 
 /* -------------------------------------------------------------------------- */

@@ -153,6 +153,9 @@ int VrAllyLasersword = 0;
 int VrLaserswordLasers = 1;
 int VrLaserswordPickupGuns = 0;
 int VrNinjaPickupGuns = 0;
+/* Lasersword melee weapon mod: off by default. */
+int VrLasersword = 0;
+int VrLaserswordNpcLasers = 0;
 int VrRagdolls = 0;       /* optional Jolt death physics, every game mode */
 int VrDismemberment = 0; /* independent preference; requires ragdolls */
 /* CE's Ragdoll.RagdollDismemberDamage / RagdollDismemberChance (ragdoll.c:41).

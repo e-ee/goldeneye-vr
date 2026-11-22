@@ -495,7 +495,7 @@ static void lnActivateShadowStep(const float origin[3], const float fwd[3])
 
 static void lnQueueCut(const float pos[3], const float vel[3], int maxCuts)
 {
-    if (gevrRagdollForceCutNear(pos, 115.0f, vel, maxCuts) > 0) {
+    if (gevrRagdollForceCutNear(pos, 95.0f, vel, maxCuts) > 0) {
         return;
     }
     for (int i = 0; i < LN_MAX_CUTS; i++) {
@@ -566,7 +566,8 @@ static void lnMoveChrProp(ChrRecord *c, const float w[3])
     }
 }
 
-static void lnHitGuardWithBlade(ChrRecord *c, const float dir[3], float dmgAmount, int forceCutCount, int isBlade)
+static void lnHitGuardWithBlade(ChrRecord *c, const float dir[3], float dmgAmount, int forceCutCount, int isBlade,
+                                const float hitPt[3])
 {
     if (!lnChrAliveValid(c, -1)) return;
     coord3d d;
@@ -590,13 +591,14 @@ static void lnHitGuardWithBlade(ChrRecord *c, const float dir[3], float dmgAmoun
         handles_shot_actors(c, HIT_CHEST, &d, wep, TRUE);
     }
 
-    const float cpos[3] = { c->prop->pos.x, c->prop->pos.y + 115.0f, c->prop->pos.z };
+    const float fallbackPos[3] = { c->prop->pos.x, c->prop->pos.y + 110.0f, c->prop->pos.z };
+    const float *cutPt = hitPt ? hitPt : fallbackPos;
     unsigned int core = 0xFFFFFFFFu, glow = 0xFFD040FFu;
     if (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD) gevrLnLaserswordPalette(VrLaserswordColor, &core, &glow);
-    lnAddSpark(cpos, sp ? 0xFFE860FFu : glow, sp ? 28.0f : 22.0f, 0.22f);
+    lnAddSpark(cutPt, sp ? 0xFFE860FFu : glow, sp ? 28.0f : 22.0f, 0.22f);
     if (forceCutCount > 0 && chrIsDead(c)) {
         const float cutVel[3] = { dir[0] * 420.0f, dir[1] * 260.0f + 160.0f, dir[2] * 420.0f };
-        lnQueueCut(c->prop->pos.f, cutVel, forceCutCount);
+        lnQueueCut(cutPt, cutVel, forceCutCount);
     }
 }
 
@@ -621,7 +623,12 @@ static void lnPerformMeleeSweep(const float eye[3], const float fwd[3], float re
         const float to[3] = { dx / d, dy / d, dz / d };
         if (lnDot3(fwd, to) < 0.35f) continue;
         if (!lnHasLos(eye, pStan, pOrigin, tgt)) continue;
-        lnHitGuardWithBlade(c, to, dmg, 2, 1);
+        const float horizDist = sqrtf(dx * dx + dz * dz);
+        float hitY = eye[1] + fwd[1] * fmaxf(horizDist, 45.0f);
+        if (hitY < c->prop->pos.y + 35.0f) hitY = c->prop->pos.y + 35.0f;
+        if (hitY > c->prop->pos.y + 168.0f) hitY = c->prop->pos.y + 168.0f;
+        const float hitPt[3] = { c->prop->pos.x, hitY, c->prop->pos.z };
+        lnHitGuardWithBlade(c, to, dmg, 2, 1, hitPt);
         lnHaptic(VrLaserswordHand ? 0 : 1, 0.8f, 0.08f);
     }
 }
@@ -690,7 +697,7 @@ static int lnVrSweepBladeAgainstGuards(int handSlot, const float hiltW[3], const
         if (!lnHasLos(hiltW, pStan, pOrigin, tgt)) continue;
 
         lnVrMarkHitChr(handSlot, c, 0.24f);
-        lnHitGuardWithBlade(c, velDirW, dmg, 2, 1);
+        lnHitGuardWithBlade(c, velDirW, dmg, 2, 1, hitPt);
         lnAddSpark(hitPt, 0xFFF480FFu, 22.0f, 0.18f);
         lnHaptic(hapticCtrl, 0.85f, 0.08f);
         hits++;
@@ -1119,7 +1126,7 @@ s32 gevrLnAllyThink(ChrRecord *ally)
             };
             float nd[3];
             lnNorm3(dir, nd);
-            lnHitGuardWithBlade(best, nd, 10.0f, 1, 1);
+            lnHitGuardWithBlade(best, nd, 10.0f, 1, 1, NULL);
             sp->swingTimer = 0.28f;
             sp->meleeCd = 0.7f;
         }
@@ -1175,7 +1182,7 @@ static void lnTriggerForcePush(const float origin[3], const float dir[3])
         const float to[3] = { dx / d, dy / d, dz / d };
         if (lnDot3(dir, to) < 0.55f) continue;
         if (!lnHasLos(origin, pStan, pOrigin, tgt)) continue;
-        lnHitGuardWithBlade(c, to, 1.2f, 0, 0);
+        lnHitGuardWithBlade(c, to, 1.2f, 0, 0, NULL);
         const float spark[3] = { c->prop->pos.x, c->prop->pos.y + 105.0f, c->prop->pos.z };
         lnAddSpark(spark, 0xA0D8FFE0u, 24.0f, 0.25f);
     }
@@ -1282,7 +1289,7 @@ void gevrLnGameTick(s32 ticks60)
     /* Pending cuts after ragdoll capture */
     for (int i = 0; i < LN_MAX_CUTS; i++) {
         if (!s_cuts[i].used) continue;
-        if (gevrRagdollForceCutNear(s_cuts[i].pos, 120.0f, s_cuts[i].vel, s_cuts[i].cutsLeft) > 0) {
+        if (gevrRagdollForceCutNear(s_cuts[i].pos, 95.0f, s_cuts[i].vel, s_cuts[i].cutsLeft) > 0) {
             s_cuts[i].used = 0;
         } else {
             s_cuts[i].ttl -= dt;
@@ -1559,7 +1566,7 @@ void gevrLnGameTick(s32 ticks60)
             if (bladeTap || pushIn > 150.0f) {
                 float dir[3] = { s_bladeLockChr->prop->pos.x - eye[0], 0.0f, s_bladeLockChr->prop->pos.z - eye[2] };
                 lnNorm3(dir, dir);
-                lnHitGuardWithBlade(s_bladeLockChr, dir, 18.0f, 0, 1);
+                lnHitGuardWithBlade(s_bladeLockChr, dir, 18.0f, 0, 1, NULL);
                 LnSpecialNpc *sp = lnFindSpecial(s_bladeLockChr);
                 if (sp) sp->meleeCd = 1.6f;
                 lnSfx(GEVR_LN_SFX_CLASH_LASERSWORD, 1.5f);
@@ -1743,7 +1750,7 @@ void gevrLnGameTick(s32 ticks60)
 
             float dir[3];
             lnNorm3(s_thrown.vel, dir);
-            lnHitGuardWithBlade(c, dir, 18.0f, 2, 1);
+            lnHitGuardWithBlade(c, dir, 18.0f, 2, 1, s_thrown.pos);
         }
     }
 
@@ -1790,7 +1797,7 @@ void gevrLnGameTick(s32 ticks60)
             s_lightningChrnums[s_lightningCount] = c->chrnum;
             s_lightningCount++;
             if (doDmg) {
-                lnHitGuardWithBlade(c, dir, 0.55f, 0, 0);
+                lnHitGuardWithBlade(c, dir, 0.55f, 0, 0, NULL);
             }
         }
     } else if (allowForce) {
@@ -1832,7 +1839,7 @@ void gevrLnGameTick(s32 ticks60)
                         const float slamDir[3] = { 0.0f, -1.0f, 0.0f };
                         const float slamVel[3] = { 0.0f, -900.0f, 0.0f };
                         memcpy(s_thrownBodyStart, s_chokeChr->prop->pos.f, sizeof(s_thrownBodyStart));
-                        lnHitGuardWithBlade(s_chokeChr, slamDir, 45.0f, 0, 0);
+                        lnHitGuardWithBlade(s_chokeChr, slamDir, 45.0f, 0, 0, NULL);
                         int bslot = gevrRagdollFindNearestBody(s_thrownBodyStart, slamDir, 260.0f, -1.0f, NULL);
                         if (bslot >= 0) gevrRagdollThrowBody(bslot, slamVel);
                         lnAddSpark(s_thrownBodyStart, 0x88C0FFFFu, 32.0f, 0.25f);
@@ -1929,7 +1936,7 @@ void gevrLnGameTick(s32 ticks60)
                 }
                 const float throwVel[3] = { launchDir[0] * 1600.0f, launchDir[1] * 1600.0f + 160.0f, launchDir[2] * 1600.0f };
                 memcpy(s_thrownBodyStart, s_chokeChr->prop->pos.f, sizeof(s_thrownBodyStart));
-                lnHitGuardWithBlade(s_chokeChr, launchDir, 40.0f, 0, 0);
+                lnHitGuardWithBlade(s_chokeChr, launchDir, 40.0f, 0, 0, NULL);
                 int bslot = gevrRagdollFindNearestBody(s_thrownBodyStart, launchDir, 260.0f, -1.0f, NULL);
                 if (bslot >= 0) {
                     gevrRagdollThrowBody(bslot, throwVel);
@@ -2001,9 +2008,9 @@ void gevrLnGameTick(s32 ticks60)
                     if (!lnHasLos(forceOrigin, pStan, pOrigin, tgt)) continue;
                     const float dmg = gevrLnLimbBlastDamage(d);
                     if (dmg >= 80.0f) {
-                        lnHitGuardWithBlade(c, dir, 24.0f, 1, 0);
+                        lnHitGuardWithBlade(c, dir, 24.0f, 1, 0, NULL);
                     } else if (dmg > 0.0f) {
-                        lnHitGuardWithBlade(c, dir, dmg * 0.05f, 0, 0);
+                        lnHitGuardWithBlade(c, dir, dmg * 0.05f, 0, 0, NULL);
                     }
                 }
                 s_limbBallSuspended = 0;
@@ -2043,11 +2050,11 @@ void gevrLnGameTick(s32 ticks60)
                 float knock = 0.0f;
                 const int impact = gevrLnThrownBodyImpact(&s_thrownBody, travel, &knock);
                 if (impact == GEVR_LN_IMPACT_DISMEMBER) {
-                    lnHitGuardWithBlade(c, forceAim, 24.0f, 3, 0);
+                    lnHitGuardWithBlade(c, forceAim, 24.0f, 3, 0, NULL);
                 } else if (impact == GEVR_LN_IMPACT_RAGDOLL_KILL) {
-                    lnHitGuardWithBlade(c, forceAim, 12.0f, 0, 0);
+                    lnHitGuardWithBlade(c, forceAim, 12.0f, 0, 0, NULL);
                 } else if (impact == GEVR_LN_IMPACT_KNOCKDOWN) {
-                    lnHitGuardWithBlade(c, forceAim, 0.8f, 0, 0);
+                    lnHitGuardWithBlade(c, forceAim, 0.8f, 0, 0, NULL);
                 }
                 if (knock <= 120.0f) {
                     s_thrownBodySlot = -1;
@@ -2162,7 +2169,7 @@ s32 gevrLnInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
                 ? (perfect ? 0xFFF480FFu : 0x58E8FFFFu)
                 : (VrLaserswordNinjaMode == GEVR_LN_LASERSWORD ? glow : 0xFFD840FFu);
             lnAddTracer(bladePt, tgt, boltCol, 0.18f);
-            lnHitGuardWithBlade(shooter, nd, perfect ? 18.0f : 3.5f, 0, 1);
+            lnHitGuardWithBlade(shooter, nd, perfect ? 18.0f : 3.5f, 0, 1, NULL);
         } else {
             const float farPt[3] = {
                 bladePt[0] + reflectDir[0] * 900.0f,

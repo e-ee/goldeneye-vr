@@ -282,6 +282,8 @@ void audioEndFrame(void)
                 {
                     extern void gevrLnAudioMix(short *pcmStereo, int frames, int sampleRate);
                     gevrLnAudioMix((short *)mixed, (int)(nextSize / (sizeof(s16) * 2)), 22050);
+                    extern void gevrLsAudioMix(short *pcmStereo, int frames, int sampleRate);
+                    gevrLsAudioMix((short *)mixed, (int)(nextSize / (sizeof(s16) * 2)), 22050);
                 }
 #endif
                 out = mixed;

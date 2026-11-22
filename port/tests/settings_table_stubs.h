@@ -39,6 +39,7 @@ int VrLaserswordForcePowers = 1, VrLaserswordCatchProjectiles = 1, VrLnPerfectPa
 int VrNinjaShield = 1, VrNinjaRicochet = 1, VrNinjaShadowStep = 1, VrNinjaBulletSlice = 1;
 int VrRivalNpc, VrRivalInNormalMode, VrRivalScale, VrNinjaNpc, VrNinjaInNormalMode, VrAllyLasersword;
 int VrLaserswordLasers = 1, VrLaserswordPickupGuns, VrNinjaPickupGuns;
+int VrLasersword, VrLaserswordNpcLasers;
 int VrScreenCurved, VrScreenPassthrough, VrRefreshRate, VrSpaceWarp = -1;
 int VrPlayMode = 1, VrCampaign;
 int VrAlly, VrAllyWeapon, VrAllyAggression = 1, VrAllyHealth = 100, VrAllyDamage = 100, VrAllyInvincible;

@@ -5895,7 +5895,8 @@ void sub_GAME_7F02BFE4(ChrRecord *self, s32 arg1, s32 arg2)
 #ifdef GEVR
         {
             extern s32 gevrLnLasersActive(void);
-            if (gevrLnLasersActive() && sfxItem != ITEM_ROCKETLAUNCH && sfxItem != ITEM_GRENADELAUNCH)
+            extern s32 gevrLsNpcLasersActive(void);
+            if ((gevrLnLasersActive() || gevrLsNpcLasersActive()) && sfxItem != ITEM_ROCKETLAUNCH && sfxItem != ITEM_GRENADELAUNCH)
             {
                 sfxItem = ITEM_LASER;
             }
@@ -7285,7 +7286,8 @@ void chrlvFireWeaponRelated(ChrRecord *self, s32 hand)
                                 case ITEM_SNIPERRIFLE:
                                 {
                                     extern s32 gevrLnLasersActive(void);
-                                    sp264 = gevrLnLasersActive() ? 1 : 0;
+                                    extern s32 gevrLsNpcLasersActive(void);
+                                    sp264 = (gevrLnLasersActive() || gevrLsNpcLasersActive()) ? 1 : 0;
                                     break;
                                 }
 #endif
@@ -7302,7 +7304,8 @@ void chrlvFireWeaponRelated(ChrRecord *self, s32 hand)
 #ifdef GEVR
                             {
                                 extern s32 gevrLnLasersActive(void);
-                                if (gevrLnLasersActive())
+                                extern s32 gevrLsNpcLasersActive(void);
+                                if (gevrLnLasersActive() || gevrLsNpcLasersActive())
                                 {
                                     beamItem = ITEM_LASER;
                                 }

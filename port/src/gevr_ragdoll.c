@@ -20,11 +20,11 @@
 #include "gevr_lasersword_ninja.h"
 
 extern int VrRagdolls, VrDismemberment, VrBodiesStay, VrDismemberChance;
-extern int VrLaserswordNinjaMode;
+extern int VrLasersword, VrLaserswordNinjaMode;
 extern int netHordeActive(void);
 
-static int rdEnabled(void) { return VrRagdolls != 0 || VrLaserswordNinjaMode != 0; }
-static int rdDismemberEnabled(void) { return VrDismemberment != 0 || VrLaserswordNinjaMode != 0; }
+static int rdEnabled(void) { return VrRagdolls != 0 || VrLasersword != 0 || VrLaserswordNinjaMode != 0; }
+static int rdDismemberEnabled(void) { return VrDismemberment != 0 || VrLasersword != 0 || VrLaserswordNinjaMode != 0; }
 
 /* Bodies kept: Bodies stay, at most RD_BODIES; a Horde run at most a dozen
  * (user, 2026-10-18: "massive slowdowns as bodies pile up" after three
@@ -1068,36 +1068,48 @@ Gfx *gevrRagdollRender(Gfx *gdl)
 
 int gevrRagdollForceCutNear(const float pos[3], float radiusCm, const float impulseVel[3], int maxCuts)
 {
-    if (!rdEnabled() || !rdDismemberEnabled() || !pdphysIsReady() || !pos || maxCuts <= 0) return 0;
-    const float r2 = radiusCm * radiusCm;
-    int cuts = 0;
-    for (int i = 0; i < RD_BODIES && cuts < maxCuts; i++) {
-        RdBody *b = &s_bodies[i];
-        if (!b->used || b->handle < 0) continue;
-        const float *bp = b->joints[b->root].m[3];
-        const float dx = bp[0] - pos[0], dy = bp[1] - pos[1], dz = bp[2] - pos[2];
-        if (dx * dx + dy * dy + dz * dz > r2) continue;
-        for (int p = 1; p < b->count && cuts < maxCuts; p++) {
-            const int sp = b->skel[p];
-            if (sp <= 0 || sp >= RD_SKEL || g_RdSkelHuman.cutradius[sp] <= 0.0f) continue;
-            if (b->cuts & (1u << p)) continue;
-            if (!rdCut(b, p)) continue;
-            pdphysRagdollKeepAwake(b->handle, 0.5f);
-            b->asleep = 0;
-            if (impulseVel) {
-                const float v[3] = {
-                    impulseVel[0] + (float)((p & 1) ? 90 : -90),
-                    impulseVel[1] + 180.0f,
-                    impulseVel[2] + (float)((p & 2) ? 70 : -70)
-                };
-                pdphysRagdollAddVelocity(b->handle, p, v);
+    if(!rdEnabled() || !rdDismemberEnabled() || !pdphysIsReady() || !pos || radiusCm<=0.0f || maxCuts<=0)return 0;
+    const float r2=radiusCm*radiusCm;
+    unsigned int tried[RD_BODIES]={0};
+    int cuts=0;
+    while(cuts<maxCuts) {
+        int bestIdx=-1, bestPart=-1;
+        float bestD2=r2;
+        for(int i=0;i<RD_BODIES;i++) {
+            RdBody *b=&s_bodies[i];
+            if(!b->used || b->handle<0)continue;
+            for(int p=1;p<b->count;p++) {
+                const int sp=b->skel[p];
+                if(sp<=0 || sp>=RD_SKEL || g_RdSkelHuman.cutradius[sp]<=0.0f)continue;
+                if((b->cuts|(tried[i]))&(1u<<p))continue;
+                const float *jp=b->joints[p].m[3];
+                const float dx=jp[0]-pos[0], dy=jp[1]-pos[1], dz=jp[2]-pos[2];
+                const float d2=dx*dx+dy*dy+dz*dz;
+                if(d2<=bestD2) {
+                    bestD2=d2;
+                    bestIdx=i;
+                    bestPart=p;
+                }
             }
-            cuts++;
         }
+        if(bestIdx<0 || bestPart<0)break;
+        RdBody *b=&s_bodies[bestIdx];
+        tried[bestIdx]|=(1u<<bestPart);
+        if(!rdCut(b,bestPart))continue;
+        pdphysRagdollKeepAwake(b->handle,0.5f);
+        b->asleep=0;
+        if(impulseVel) {
+            const float v[3]={
+                impulseVel[0]+(float)((bestPart&1)?90:-90),
+                impulseVel[1]+180.0f,
+                impulseVel[2]+(float)((bestPart&2)?70:-70)
+            };
+            pdphysRagdollAddVelocity(b->handle,bestPart,v);
+        }
+        cuts++;
     }
     return cuts;
 }
-
 int gevrRagdollFindNearestBody(const float from[3], const float dir[3], float maxDistCm, float minDot, float outPos[3])
 {
     if (!rdEnabled() || !pdphysIsReady() || !from || !dir) return -1;

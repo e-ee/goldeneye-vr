@@ -17,6 +17,7 @@ with tempfile.TemporaryDirectory(prefix="gevr-lasersword-ninja-") as temp:
         "-I" + str(ROOT / "port/include"),
         str(ROOT / "port/tests/lasersword_ninja_native.c"),
         str(ROOT / "port/src/gevr_lasersword_ninja.c"),
+        str(ROOT / "port/src/gevr_lasersword.c"),
         "-lm", "-o", str(exe),
     ], check=True)
     subprocess.run([str(exe)], check=True)
@@ -32,6 +33,7 @@ with tempfile.TemporaryDirectory(prefix="gevr-lasersword-ninja-") as temp:
         "-I" + str(ROOT / "src/game"),
         str(ROOT / "port/tests/lasersword_ninja_native.c"),
         str(ROOT / "port/src/gevr_lasersword_ninja.c"),
+        str(ROOT / "port/src/gevr_lasersword.c"),
         *game,
         "-lm", "-o", str(exe),
     ], check=True)
@@ -117,6 +119,7 @@ int VrNinjaShield = 1, VrNinjaRicochet = 1, VrNinjaShadowStep = 1, VrNinjaBullet
 int VrRivalNpc, VrRivalInNormalMode, VrRivalScale, VrNinjaNpc, VrNinjaInNormalMode;
 int VrAllyLasersword;
 int VrLaserswordLasers = 1, VrLaserswordPickupGuns, VrNinjaPickupGuns;
+int VrLasersword, VrLaserswordNpcLasers;
 
 static void saveLn(FILE *f) {{
 {save_block}

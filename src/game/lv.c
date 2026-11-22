@@ -325,6 +325,7 @@ void lvlStageLoad(s32 stage)
 #ifdef GEVR
     gevrRagdollReset();
     { extern void gevrLnGameReset(void); gevrLnGameReset(); }
+    { extern void gevrLsGameReset(void); gevrLsGameReset(); }
 #endif
     g_CurrentStageToLoad = stage;
 
@@ -1487,6 +1488,7 @@ void lvlManageMpGame(void)
     gevrVrStatsSimulation((unsigned)g_ClockTimer);
     gevrRagdollTick(g_ClockTimer);
     { extern void gevrLnGameTick(s32 ticks); gevrLnGameTick(g_ClockTimer); }
+    { extern void gevrLsGameTick(s32 ticks); gevrLsGameTick(g_ClockTimer); }
     { extern void gevrHordeTick(int ticks); gevrHordeTick(g_ClockTimer); }
     { extern void gevrArenaTick(s32 ticks); gevrArenaTick(g_ClockTimer); }
 #endif
