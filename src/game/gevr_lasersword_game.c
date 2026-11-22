@@ -48,8 +48,6 @@ extern Gfx *combiner_bayer_lod_perspective(Gfx *gdl);
 #define LS_PARRY_WINDOW  0.22f
 
 static struct {
-    GevrLsTrigger rtTrig, ltTrig;
-    GevrLsSlash slash;
     GevrLsIgnition ignite[2];
     GevrLsThrown thrown;
     int blocking;
@@ -122,7 +120,7 @@ static int lsInGameplay(void)
 
 static int lsActive(void)
 {
-    return VrLasersword != 0 && lsInGameplay() && gevrLsPackGet() != NULL;
+    return gevrIsQuestVrApk() && g_gevrStereo && VrLasersword != 0 && lsInGameplay() && gevrLsPackGet() != NULL;
 }
 
 static int lsHandHoldsKnife(s32 hand)
@@ -449,160 +447,95 @@ void gevrLsGameTick(s32 ticks60)
 
     float maxSwing01 = 0.0f, maxExtend = 0.0f;
 
-    if (g_gevrStereo) {
-        s_ls.blocking = 0;
-        for (int h = 0; h < 2; h++) {
-            const int ctrl = (h == GUNRIGHT) ? 1 : 0;
-            if (!lsHandHoldsKnife(h) || (s_ls.thrown.active && s_ls.thrown.hand == h)) continue;
-            if (s_ls.ignite[h].extend > maxExtend) maxExtend = s_ls.ignite[h].extend;
+    s_ls.blocking = 0;
+    for (int h = 0; h < 2; h++) {
+        const int ctrl = (h == GUNRIGHT) ? 1 : 0;
+        if (!lsHandHoldsKnife(h) || (s_ls.thrown.active && s_ls.thrown.hand == h)) continue;
+        if (s_ls.ignite[h].extend > maxExtend) maxExtend = s_ls.ignite[h].extend;
 
-            const int trigNow = get_analog_value(ctrl, "trigger") > 0.5f;
-            const int trigPressed = trigNow && !s_ls.vrTrigWas[ctrl];
-            const int trigReleased = !trigNow && s_ls.vrTrigWas[ctrl];
-            s_ls.vrTrigWas[ctrl] = trigNow;
-            if (trigPressed) s_ls.vrThrowGuard[ctrl] = 0.35f;
-            s_ls.vrBlocking[h] = trigNow;
-            if (trigNow) s_ls.blocking = 1;
+        const int trigNow = get_analog_value(ctrl, "trigger") > 0.5f;
+        const int trigPressed = trigNow && !s_ls.vrTrigWas[ctrl];
+        const int trigReleased = !trigNow && s_ls.vrTrigWas[ctrl];
+        s_ls.vrTrigWas[ctrl] = trigNow;
+        if (trigPressed) s_ls.vrThrowGuard[ctrl] = 0.35f;
+        s_ls.vrBlocking[h] = trigNow;
+        if (trigNow) s_ls.blocking = 1;
 
-            float hr[3], hu[3], hf[3], hPos[3], velCm[3] = { 0.0f, 0.0f, 0.0f };
-            gevrLsGetHandVelocityWorld(ctrl, velCm);
-            if (!gevrLsGetHandPoseWorld(ctrl, hPos, hr, hu, hf)) continue;
+        float hr[3], hu[3], hf[3], hPos[3], velCm[3] = { 0.0f, 0.0f, 0.0f };
+        gevrLsGetHandVelocityWorld(ctrl, velCm);
+        if (!gevrLsGetHandPoseWorld(ctrl, hPos, hr, hu, hf)) continue;
 
-            float prevTip[3];
-            const int hasPrev = s_ls.vrPoseValid[h];
-            if (hasPrev) memcpy(prevTip, s_ls.vrTipW[h], 12);
+        float prevTip[3];
+        const int hasPrev = s_ls.vrPoseValid[h];
+        if (hasPrev) memcpy(prevTip, s_ls.vrTipW[h], 12);
 
-            float dirW[3] = {
-                hf[0] * 0.35f + hu[0] * 0.94f,
-                hf[1] * 0.35f + hu[1] * 0.94f,
-                hf[2] * 0.35f + hu[2] * 0.94f
-            };
-            lsNorm3(dirW, dirW);
-            const float activeLen = 91.0f * s_ls.ignite[h].extend + 24.0f;
-            const float tipW[3] = {
-                hPos[0] + dirW[0] * activeLen,
-                hPos[1] + dirW[1] * activeLen,
-                hPos[2] + dirW[2] * activeLen
-            };
-            memcpy(s_ls.vrHiltW[h], hPos, 12);
-            memcpy(s_ls.vrTipW[h], tipW, 12);
-            memcpy(s_ls.vrDirW[h], dirW, 12);
-            memcpy(s_ls.vrAimW[h], hf, 12);
-            memcpy(s_ls.vrRightW[h], hr, 12);
-            s_ls.vrPoseValid[h] = 1;
-            lsTrailPushWorld(h, hPos, tipW);
+        float dirW[3] = {
+            hf[0] * 0.35f + hu[0] * 0.94f,
+            hf[1] * 0.35f + hu[1] * 0.94f,
+            hf[2] * 0.35f + hu[2] * 0.94f
+        };
+        lsNorm3(dirW, dirW);
+        const float activeLen = 91.0f * s_ls.ignite[h].extend + 24.0f;
+        const float tipW[3] = {
+            hPos[0] + dirW[0] * activeLen,
+            hPos[1] + dirW[1] * activeLen,
+            hPos[2] + dirW[2] * activeLen
+        };
+        memcpy(s_ls.vrHiltW[h], hPos, 12);
+        memcpy(s_ls.vrTipW[h], tipW, 12);
+        memcpy(s_ls.vrDirW[h], dirW, 12);
+        memcpy(s_ls.vrAimW[h], hf, 12);
+        memcpy(s_ls.vrRightW[h], hr, 12);
+        s_ls.vrPoseValid[h] = 1;
+        lsTrailPushWorld(h, hPos, tipW);
 
-            if (!s_ls.thrown.active && trigReleased && s_ls.vrThrowGuard[ctrl] <= 0.0f
-                && gevrLsVrWristThrow(velCm, hf, 1)) {
-                lsLaunchThrow(h, hPos, hf, ctrl);
-                continue;
-            }
-
-            const float spd = sqrtf(lsDot3(velCm, velCm));
-            const float sw01 = fminf(1.0f, spd / 240.0f);
-            if (sw01 > maxSwing01) maxSwing01 = sw01;
-
-            if (spd >= 115.0f && s_ls.ignite[h].extend > 0.35f) {
-                float velDir[3];
-                lsNorm3(velCm, velDir);
-                if (s_ls.vrWhooshCd[h] <= 0.0f) {
-                    gevrLsAudioTrigger(GEVR_LS_SFX_SLASH, 0.75f + 0.45f * sw01);
-                    s_ls.vrWhooshCd[h] = 0.22f;
-                }
-                const s32 n = get_numguards();
-                for (s32 i = 0; i < n; i++) {
-                    ChrRecord *c = &g_ChrSlots[i];
-                    if (!lsChrEnemy(c) || !lsVrCanHitChr(h, c)) continue;
-                    const float r = (c->chrwidth > 12.0f ? c->chrwidth : 20.0f) + 18.0f;
-                    float hitPt[3];
-                    int hit = gevrLsSegmentHitCylinder(hPos, tipW, c->prop->pos.f, r, 185.0f, hitPt);
-                    if (!hit && hasPrev) hit = gevrLsSegmentHitCylinder(prevTip, tipW, c->prop->pos.f, r, 185.0f, hitPt);
-                    if (!hit) continue;
-                    const float tgt[3] = { c->prop->pos.x, c->prop->pos.y + 115.0f, c->prop->pos.z };
-                    if (!lsHasLos(hPos, pStan, pOrigin, tgt)) continue;
-
-                    lsVrMarkHitChr(h, c, 0.24f);
-                    lsHitGuard(c, hitPt, velDir, 6.0f + 8.0f * sw01, 2);
-                    lsHaptic(ctrl, 0.85f, 0.08f);
-                }
-                const float midPt[3] = { (hPos[0] + tipW[0]) * 0.5f, (hPos[1] + tipW[1]) * 0.5f, (hPos[2] + tipW[2]) * 0.5f };
-                if (gevrRagdollForceCutNear(midPt, 52.0f, velCm, 1) > 0
-                    || gevrRagdollForceCutNear(tipW, 42.0f, velCm, 1) > 0) {
-                    lsHaptic(ctrl, 0.65f, 0.05f);
-                }
-            }
-
-            if (pdphysIsReady() && s_ls.ignite[h].extend > 0.5f && s_ls.wallSparkCd[h] <= 0.0f) {
-                float wallPos[3];
-                if (pdphysRaycastAnyRoom(hPos, tipW, wallPos, NULL, NULL)) {
-                    lsAddSpark(wallPos, 0xFF9838FFu, 15.0f, 0.14f);
-                    lsHaptic(ctrl, 0.25f, 0.02f);
-                    s_ls.wallSparkCd[h] = 0.055f;
-                }
-            }
+        if (!s_ls.thrown.active && trigReleased && s_ls.vrThrowGuard[ctrl] <= 0.0f
+            && gevrLsVrWristThrow(velCm, hf, 1)) {
+            lsLaunchThrow(h, hPos, hf, ctrl);
+            continue;
         }
-    } else {
-        const int h = lsHandHoldsKnife(GUNRIGHT) ? GUNRIGHT : GUNLEFT;
-        const int inHand = !(s_ls.thrown.active && s_ls.thrown.hand == h);
-        maxExtend = s_ls.ignite[h].extend;
 
-        int rtDown = 0, ltDown = 0, isMouse = 0;
-        gevrLsInputReadFlat(&rtDown, &ltDown, &isMouse);
-        (void)isMouse;
-        const int rtEvt = gevrLsTriggerUpdate(&s_ls.rtTrig, rtDown && inHand, dt);
-        const int ltEvt = gevrLsTriggerUpdate(&s_ls.ltTrig, ltDown && inHand, dt);
-        s_ls.blocking = (ltDown && inHand) ? 1 : 0;
+        const float spd = sqrtf(lsDot3(velCm, velCm));
+        const float sw01 = fminf(1.0f, spd / 240.0f);
+        if (sw01 > maxSwing01) maxSwing01 = sw01;
 
-        if (rtEvt == GEVR_LS_TRIG_TAP && inHand && gevrLsSlashStart(&s_ls.slash, s_ls.blocking)) {
-            gevrLsAudioTrigger(GEVR_LS_SFX_SLASH, 1.0f);
-            const float reach2 = (GEVR_LS_REACH_CM + 55.0f) * (GEVR_LS_REACH_CM + 55.0f);
+        if (spd >= 115.0f && s_ls.ignite[h].extend > 0.35f) {
+            float velDir[3];
+            lsNorm3(velCm, velDir);
+            if (s_ls.vrWhooshCd[h] <= 0.0f) {
+                gevrLsAudioTrigger(GEVR_LS_SFX_SLASH, 0.75f + 0.45f * sw01);
+                s_ls.vrWhooshCd[h] = 0.22f;
+            }
             const s32 n = get_numguards();
             for (s32 i = 0; i < n; i++) {
                 ChrRecord *c = &g_ChrSlots[i];
-                if (!lsChrEnemy(c)) continue;
-                const float tgt[3] = { c->prop->pos.x, c->prop->pos.y + 125.0f, c->prop->pos.z };
-                const float dx = tgt[0] - eye[0], dy = tgt[1] - eye[1], dz = tgt[2] - eye[2];
-                const float d2 = dx * dx + dy * dy + dz * dz;
-                if (d2 > reach2 || d2 < 1.0f) continue;
-                const float d = sqrtf(d2);
-                const float to[3] = { dx / d, dy / d, dz / d };
-                if (lsDot3(fwd, to) < 0.35f || !lsHasLos(eye, pStan, pOrigin, tgt)) continue;
-                float aimY = eye[1] + fwd[1] * fminf(d, GEVR_LS_REACH_CM) + 8.0f;
-                const float yLo = c->prop->pos.y + 45.0f, yHi = c->prop->pos.y + 162.0f;
-                if (aimY < yLo) aimY = yLo;
-                if (aimY > yHi) aimY = yHi;
-                const float hitPt[3] = { c->prop->pos.x, aimY, c->prop->pos.z };
-                lsHitGuard(c, hitPt, to, 14.0f, 2);
+                if (!lsChrEnemy(c) || !lsVrCanHitChr(h, c)) continue;
+                const float r = (c->chrwidth > 12.0f ? c->chrwidth : 20.0f) + 18.0f;
+                float hitPt[3];
+                int hit = gevrLsSegmentHitCylinder(hPos, tipW, c->prop->pos.f, r, 185.0f, hitPt);
+                if (!hit && hasPrev) hit = gevrLsSegmentHitCylinder(prevTip, tipW, c->prop->pos.f, r, 185.0f, hitPt);
+                if (!hit) continue;
+                const float tgt[3] = { c->prop->pos.x, c->prop->pos.y + 115.0f, c->prop->pos.z };
+                if (!lsHasLos(hPos, pStan, pOrigin, tgt)) continue;
+
+                lsVrMarkHitChr(h, c, 0.24f);
+                lsHitGuard(c, hitPt, velDir, 6.0f + 8.0f * sw01, 2);
+                lsHaptic(ctrl, 0.85f, 0.08f);
+            }
+            const float midPt[3] = { (hPos[0] + tipW[0]) * 0.5f, (hPos[1] + tipW[1]) * 0.5f, (hPos[2] + tipW[2]) * 0.5f };
+            if (gevrRagdollForceCutNear(midPt, 52.0f, velCm, 1) > 0
+                || gevrRagdollForceCutNear(tipW, 42.0f, velCm, 1) > 0) {
+                lsHaptic(ctrl, 0.65f, 0.05f);
             }
         }
 
-        const float sp = gevrLsSlashStep(&s_ls.slash, dt);
-        if (sp >= 0.0f) maxSwing01 = sinf(sp * 3.14159f);
-
-        if (inHand) {
-            const float sideSign = (h == GUNRIGHT) ? 1.0f : -1.0f;
-            const float len = 91.0f * s_ls.ignite[h].extend + 24.0f;
-            float hw[3], tw[3], wDir[3];
-            if (s_ls.slash.active) {
-                const float swing = (s_ls.slash.dir == 0 ? 1.0f - 2.0f * sp : -1.0f + 2.0f * sp) * sideSign;
-                for (int k = 0; k < 3; k++) {
-                    hw[k] = eye[k] + right[k] * (14.0f * swing) - up[k] * 10.0f + fwd[k] * 34.0f;
-                    wDir[k] = right[k] * (-0.55f * swing) + up[k] * (0.35f - 0.5f * sp) + fwd[k] * 0.75f;
-                }
-            } else {
-                for (int k = 0; k < 3; k++) {
-                    hw[k] = eye[k] + right[k] * (17.0f * sideSign) - up[k] * 14.0f + fwd[k] * 32.0f;
-                    wDir[k] = right[k] * (-0.22f * sideSign) + up[k] * 0.72f + fwd[k] * 0.66f;
-                }
+        if (pdphysIsReady() && s_ls.ignite[h].extend > 0.5f && s_ls.wallSparkCd[h] <= 0.0f) {
+            float wallPos[3];
+            if (pdphysRaycastAnyRoom(hPos, tipW, wallPos, NULL, NULL)) {
+                lsAddSpark(wallPos, 0xFF9838FFu, 15.0f, 0.14f);
+                lsHaptic(ctrl, 0.25f, 0.02f);
+                s_ls.wallSparkCd[h] = 0.055f;
             }
-            lsNorm3(wDir, wDir);
-            for (int k = 0; k < 3; k++) tw[k] = hw[k] + wDir[k] * len;
-            lsTrailPushWorld(h, hw, tw);
-        }
-
-        if (!s_ls.thrown.active && inHand && (ltEvt == GEVR_LS_TRIG_DOUBLE_TAP || rtEvt == GEVR_LS_TRIG_HOLD_RELEASE)) {
-            const float throwOrigin[3] = { eye[0] + fwd[0] * 36.0f, eye[1] - up[1] * 8.0f, eye[2] + fwd[2] * 36.0f };
-            lsLaunchThrow(h, throwOrigin, fwd, -1);
         }
     }
 
@@ -673,7 +606,7 @@ s32 gevrLsInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
     int blockHand = -1;
     for (int h = 0; h < 2; h++) {
         if (!lsHandHoldsKnife(h) || (s_ls.thrown.active && s_ls.thrown.hand == h)) continue;
-        if (g_gevrStereo ? s_ls.vrBlocking[h] : s_ls.blocking) { blockHand = h; break; }
+        if (s_ls.vrBlocking[h] && s_ls.vrPoseValid[h]) { blockHand = h; break; }
     }
     if (blockHand < 0) return 0;
 
@@ -684,19 +617,12 @@ s32 gevrLsInterceptPlayerDamage(f32 damageAmount, f32 vecX, f32 vecZ)
     float toShooter[3], reflectDir[3] = { 0.0f, 0.0f, 0.0f };
     if (!gevrLsBulletTravelToShooter(travel, toShooter)) memcpy(toShooter, fwd, 12);
 
-    const int res = (g_gevrStereo && s_ls.vrPoseValid[blockHand])
-        ? gevrLsCheckVrBladeBlock(1, fwd, s_ls.vrDirW[blockHand], s_ls.vrAimW[blockHand], toShooter, reflectDir)
-        : gevrLsCheckBlock(1, fwd, toShooter, reflectDir);
+    const int res = gevrLsCheckVrBladeBlock(1, fwd, s_ls.vrDirW[blockHand], s_ls.vrAimW[blockHand], toShooter, reflectDir);
     if (res != GEVR_LS_BLOCK_DEFLECT) return 0;
 
     const int perfect = (s_ls.blockHoldSec <= LS_PARRY_WINDOW);
     float bladePt[3];
-    if (g_gevrStereo && s_ls.vrPoseValid[blockHand]) {
-        for (int k = 0; k < 3; k++) bladePt[k] = s_ls.vrHiltW[blockHand][k] + s_ls.vrDirW[blockHand][k] * 55.0f;
-    } else {
-        const float sideSign = (blockHand == GUNRIGHT) ? 1.0f : -1.0f;
-        for (int k = 0; k < 3; k++) bladePt[k] = eye[k] + fwd[k] * 48.0f + right[k] * (6.0f * sideSign) - up[k] * 6.0f;
-    }
+    for (int k = 0; k < 3; k++) bladePt[k] = s_ls.vrHiltW[blockHand][k] + s_ls.vrDirW[blockHand][k] * 55.0f;
 
     unsigned int core = 0xFFFFFFFFu, glow = 0x2890FFE8u;
     gevrLsPalette(VrLaserswordColor, &core, &glow);
@@ -876,38 +802,15 @@ Gfx *gevrLsDrawHand(Gfx *gdl, s32 hand)
 
     const Mtxf *w2s = camGetWorldToScreenMtxf();
     const float s = lsViewScale();
-    const float sideSign = (hand == GUNRIGHT) ? 1.0f : -1.0f;
     const int ctrl = (hand == GUNRIGHT) ? 1 : 0;
     Gfx *const startGdl = gdl;
 
-    float hilt[3], tipDir[3], rRef[3] = { sideSign, 0.0f, 0.0f };
-    int haveVr = 0;
-    if (g_gevrStereo) {
-        float r[3], u[3], b[3];
-        if (gevrLsGetGripAxes(ctrl, hilt, r, u, b)) {
-            for (int k = 0; k < 3; k++) {
-                tipDir[k] = -b[k] * 0.35f + u[k] * 0.94f;
-                rRef[k] = r[k];
-            }
-            lsNorm3(tipDir, tipDir);
-            haveVr = 1;
-        }
+    float hilt[3], tipDir[3], rRef[3], u[3], b[3];
+    if (!gevrLsGetGripAxes(ctrl, hilt, rRef, u, b)) return gdl;
+    for (int k = 0; k < 3; k++) {
+        tipDir[k] = -b[k] * 0.35f + u[k] * 0.94f;
     }
-    if (!haveVr) {
-        if (s_ls.blocking) {
-            hilt[0] = -14.0f * sideSign * s; hilt[1] = -6.0f * s; hilt[2] = -34.0f * s;
-            tipDir[0] = 0.65f * sideSign; tipDir[1] = 0.72f; tipDir[2] = -0.22f;
-        } else if (s_ls.slash.active) {
-            const float u = s_ls.slash.duration > 0.0f ? s_ls.slash.t / s_ls.slash.duration : 0.0f;
-            const float swing = (s_ls.slash.dir == 0 ? 1.0f - 2.0f * u : -1.0f + 2.0f * u) * sideSign;
-            hilt[0] = (14.0f * swing) * s; hilt[1] = (-10.0f - 4.0f * sinf(u * 3.14159f)) * s; hilt[2] = -36.0f * s;
-            tipDir[0] = -0.55f * swing; tipDir[1] = 0.35f - 0.5f * u; tipDir[2] = -0.75f;
-        } else {
-            hilt[0] = 17.0f * sideSign * s; hilt[1] = -14.0f * s; hilt[2] = -32.0f * s;
-            tipDir[0] = -0.22f * sideSign; tipDir[1] = 0.72f; tipDir[2] = -0.66f;
-        }
-        lsNorm3(tipDir, tipDir);
-    }
+    lsNorm3(tipDir, tipDir);
 
     unsigned int core = 0xFFFFFFFFu, glow = 0x2890FFE8u;
     gevrLsPalette(VrLaserswordColor, &core, &glow);

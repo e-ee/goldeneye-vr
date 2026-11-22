@@ -29,6 +29,12 @@ static int VrUnlockAll = 1;
 static int customPages;
 static void gevrHapticsPage(const ImVec4 &, const ImVec4 &, const ImVec4 &) { customPages++; }
 static void gevrModsPage(unsigned, const ImVec4 &, const ImVec4 &, const ImVec4 &) { customPages++; }
+static void gevrDrawInlineLsPack(unsigned, const ImVec4 &, const ImVec4 &) {
+    ImGui::SameLine();
+    ImGui::SmallButton("Update Lasersword");
+    ImGui::SameLine();
+    ImGui::SmallButton("Remove Lasersword");
+}
 // Play's LiveSplit row at its fullest: on, the longest address, the longest status
 int VrLiveSplit = 1;
 char VrLiveSplitHost[64] = "speedrun-pc.example.local";

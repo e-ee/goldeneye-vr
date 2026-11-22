@@ -27,6 +27,8 @@ static int VrOddjobHat=0;          /* Mods: Oddjob's hat (PR #196), drawn when i
 static int gevrHatAvailable() {return 1;}
 static int VrLasersword=0;
 static int gevrLsAvailable() {return 1;}
+static int gevrIsQuestVrApk() {return 1;}
+static void gevrLsPackUnload() {}
 static bool available;
 static std::string raw;
 static unsigned clockMs;

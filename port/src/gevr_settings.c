@@ -62,6 +62,7 @@ extern void musicTrack3ApplySeqpVol(unsigned short volume);
 extern void gevrSndApplySfxVolume(unsigned short volume);
 extern int gevrHatAvailable(void);
 extern int gevrLsAvailable(void);
+extern int gevrIsQuestVrApk(void);
 extern int gevrBeanIsAvailable(void), gevrBeanIsEnabled(void);
 extern void gevrBeanSetEnabled(int on);
 extern int gevrTexpackFillAvailable(void);
@@ -135,6 +136,7 @@ typedef struct Row {
     int flat;                       /* a flat game's own (touch, gyro): hidden on the headset */
     int pad;                        /* a flat game's pad: hidden on the headset, shown on every flat game */
     int flatgame;                   /* a flat game's own (its window): hidden on the headset, shown on every flat game */
+    int questVr;                    /* Quest VR APK only: hidden on flat/mobile/frame/desktop builds */
 } Row;
 
 /* ---- the special cases (as options.c had them) ---- */
@@ -691,12 +693,12 @@ static const Row s_rows[] = {
       .kind = GEVR_SET_TOGGLE, .section = GEVR_SEC_MODS, .where = GEVR_SET_INGAME, .ivar = &VrBloodPatch, .def = NAN },
     { .label = "Oddjob's hat", .tooltip = "Oddjob's hat in place of the throwing knife.", .kind = GEVR_SET_TOGGLE,
       .section = GEVR_SEC_MODS, .where = GEVR_SET_INGAME, .ivar = &VrOddjobHat, .def = NAN, .blocked = blockedHat },
-    { .label = "Lasersword", .tooltip = "Adds a Lasersword melee weapon with deflection, throwing and dismemberment.", .kind = GEVR_SET_TOGGLE,
+    { .label = "Lasersword", .headset = 1, .questVr = 1, .tooltip = "Adds a Lasersword melee weapon with deflection, throwing and dismemberment.", .kind = GEVR_SET_TOGGLE,
       .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLasersword, .def = NAN, .blocked = blockedLasersword },
-    { .label = "  Blade colour", .tooltip = "Your lasersword blade colour.", .kind = GEVR_SET_CHOICE,
+    { .label = "  Blade colour", .headset = 1, .questVr = 1, .tooltip = "Your lasersword blade colour.", .kind = GEVR_SET_CHOICE,
       .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLaserswordColor,
       .ivalues = s_lsEight, .names = s_lsColorNames, .count = 8, .def = NAN, .shown = shownLasersword },
-    { .label = "  NPC laser shots", .tooltip = "Enemy guns and turrets fire visible GoldenEye laser bolts.", .kind = GEVR_SET_TOGGLE,
+    { .label = "  NPC laser shots", .headset = 1, .questVr = 1, .tooltip = "Enemy guns and turrets fire visible GoldenEye laser bolts.", .kind = GEVR_SET_TOGGLE,
       .section = GEVR_SEC_MODS, .lsection = L(GEVR_LSEC_RULES), .where = GEVR_SET_BOTH, .ivar = &VrLaserswordNpcLasers,
       .def = NAN, .shown = shownLasersword },
 
@@ -796,6 +798,7 @@ int gevrSettingShown(int id)
 #else
     if (r && (r->flat || r->pad || r->flatgame)) return 0;   /* touch, gyro, a pad and the window: a flat game's */
 #endif
+    if (r && r->questVr && !gevrIsQuestVrApk()) return 0;
     return r && (!r->shown || r->shown());
 }
 

@@ -30,6 +30,8 @@ static int VrOddjobHat=0;          /* Mods: Oddjob's hat (PR #196), drawn when i
 static int gevrHatAvailable() {return 1;}
 static int VrLasersword=0;
 static int gevrLsAvailable() {return 1;}
+static int gevrIsQuestVrApk() {return 1;}
+static void gevrLsPackUnload() {}
 #define GEVR_CAMPAIGN_GE 0
 #define GEVR_CAMPAIGN_MIRROR 3
 #define GEVR_CAMPAIGN_MARIO 4
