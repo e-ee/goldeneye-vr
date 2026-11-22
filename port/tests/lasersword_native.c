@@ -136,14 +136,29 @@ static void test_block_deflect_and_blade_hit(void)
     assert(rt == 1 && lt == 0 && mouse == 1);
 }
 
-static void test_procedural_audio(void)
+static void test_pack_and_audio(const char *packPath)
 {
     short buf[1024];
+
+    gevrLsPackUnload();
     gevrLsAudioReset();
+    assert(gevrLsPackGet() == NULL);
+    gevrLsAudioSetState(1, 1.0f, 0.8f, 1);
+    gevrLsAudioTrigger(GEVR_LS_SFX_IGNITE, 1.0f);
     memset(buf, 0, sizeof(buf));
     gevrLsAudioMix(buf, 512, 22050);
     for (int i = 0; i < 1024; i++) assert(buf[i] == 0);
 
+    assert(gevrLsPackLoadFile(packPath) == 1);
+    assert(gevrLsAvailable() == 1);
+    const GevrLsPack *pk = gevrLsPackGet();
+    assert(pk && pk->loaded && pk->triCount >= 100 && pk->verts != NULL);
+    assert(pk->emitterOffsetCm > 10.0f && pk->bladeRadiusCm > 0.5f);
+    for (int c = 0; c < GEVR_LS_CLIP_COUNT; c++) {
+        assert(pk->clips[c] != NULL && pk->clipLen[c] > 1000 && pk->clipRate[c] == 22050);
+    }
+
+    gevrLsAudioReset();
     gevrLsAudioSetState(1, 1.0f, 0.8f, 1);
     memset(buf, 0, sizeof(buf));
     gevrLsAudioMix(buf, 512, 22050);
@@ -162,7 +177,7 @@ static void test_procedural_audio(void)
         long long e = 0;
         for (int i = 0; i < 1024; i++) e += abs(buf[i]);
         assert(e > 10000);
-        for (int pass = 0; pass < 30; pass++) {
+        for (int pass = 0; pass < 35; pass++) {
             memset(buf, 0, sizeof(buf));
             gevrLsAudioMix(buf, 512, 22050);
         }
@@ -170,14 +185,19 @@ static void test_procedural_audio(void)
         gevrLsAudioMix(buf, 512, 22050);
         for (int i = 0; i < 1024; i++) assert(buf[i] == 0);
     }
+
+    assert(gevrLsPackLoadFile("no-such-lasersword-pack.bin") == 0);
+    assert(gevrLsPackGet() == pk);
+    gevrLsPackUnload();
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    assert(argc >= 2);
     test_palette_and_gestures();
     test_wrist_ignition_and_throw();
     test_block_deflect_and_blade_hit();
-    test_procedural_audio();
+    test_pack_and_audio(argv[1]);
     puts("lasersword core: all passed");
     return 0;
 }

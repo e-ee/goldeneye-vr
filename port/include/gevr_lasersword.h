@@ -114,7 +114,38 @@ void gevrLsReflectVec(const float v[3], const float n[3], float out[3]);
 void gevrLsInputFeedFlat(int rtDown, int ltDown, int isMouse);
 void gevrLsInputReadFlat(int *rtDown, int *ltDown, int *isMouse);
 
-/* Procedural DSP audio synthesizer (22050 Hz stereo PCM mixer, zero assets) */
+/* Downloadable mod pack (texture-packs/lasersword/lasersword.bin, GEVRLS1 format) */
+enum {
+    GEVR_LS_CLIP_HUM = 0,
+    GEVR_LS_CLIP_IGNITE,
+    GEVR_LS_CLIP_SLASH,
+    GEVR_LS_CLIP_DEFLECT,
+    GEVR_LS_CLIP_CLASH,
+    GEVR_LS_CLIP_COUNT
+};
+
+typedef struct GevrLsVtx {
+    float p[3];
+    unsigned char rgba[4];
+} GevrLsVtx;
+
+typedef struct GevrLsPack {
+    int loaded;
+    float emitterOffsetCm;
+    float bladeRadiusCm;
+    int triCount;
+    GevrLsVtx *verts;
+    int clipLen[GEVR_LS_CLIP_COUNT];
+    int clipRate[GEVR_LS_CLIP_COUNT];
+    short *clips[GEVR_LS_CLIP_COUNT];
+} GevrLsPack;
+
+int gevrLsAvailable(void);
+const GevrLsPack *gevrLsPackGet(void);
+int gevrLsPackLoadFile(const char *path);
+void gevrLsPackUnload(void);
+
+/* 22050 Hz stereo PCM sample mixer reading from loaded pack clips */
 enum {
     GEVR_LS_SFX_IGNITE = 1,
     GEVR_LS_SFX_SLASH,

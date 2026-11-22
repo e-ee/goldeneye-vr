@@ -18400,7 +18400,8 @@ static s32 gevrWpAddItem(s32 n, s32 hand, s32 item, s32 inv, const char *name)
 static s32 gevrWeaponBuildList(s32 hand)
 {
     extern int VrLasersword, VrLaserswordNinjaMode;
-    const s32 lsName = VrLasersword && !VrLaserswordNinjaMode;
+    extern int gevrLsAvailable(void);
+    const s32 lsName = VrLasersword && !VrLaserswordNinjaMode && gevrLsAvailable();
     s32 i, n = 0;
     s32 count = bondinvCountTotalItemsInInv();
     if (hand == GUNLEFT)

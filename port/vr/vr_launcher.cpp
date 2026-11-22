@@ -5,6 +5,7 @@
 #include "gevr_bean.h"
 #include "gevr_bean_ce.h"
 #include "gevr_oddjobhat.h"
+#include "gevr_lasersword.h"
 /*
  * GoldenEye VR launcher, inside VR.
  *
@@ -1192,7 +1193,7 @@ static void gevrModsPage(Uint32 now, const ImVec4 &gold, const ImVec4 &good, con
         ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthStretch, 1.2f);
         for (const ModPack &p : packs) {
-            if (p.id == "oddjob-hat") continue;   // a mod, not a look: the row above Done
+            if (p.id == "oddjob-hat" || p.id == "lasersword") continue;   // mods, not looks: the rows above Done
             ImGui::PushID(p.id.c_str());
             const bool bean = p.id == "ge007-bean";
             const bool installed = p.state == "installed";
@@ -1402,6 +1403,36 @@ static void gevrModsPage(Uint32 now, const ImVec4 &gold, const ImVec4 &good, con
                 gevrJavaCommand("modsCommand", "install:oddjob-hat");
             if (ImGui::IsItemHovered())
                 gevrTooltip(p.state == "error" ? "%s" : "Throwing knives become Oddjob's hat (007 Nightfire).\nA small download.",
+                                  p.message.c_str());
+        }
+        ImGui::PopID();
+    }
+    for (const ModPack &p : packs) {
+        if (p.id != "lasersword") continue;
+        ImGui::PushID("lasersword");
+        const bool busy = p.state == "downloading" || p.state == "installing";
+        if (busy) {
+            ImGui::TextColored(gold, "Lasersword %d%%", p.progress < 0 ? 0 : p.progress);
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Cancel")) gevrJavaCommand("modsCommand", "cancel");
+        } else if (p.state == "installed" || gevrLsAvailable()) {
+            bool ls = VrLasersword != 0;
+            if (ImGui::Checkbox("Lasersword", &ls)) { VrLasersword = ls ? 1 : 0; vrSettingsSave(); }
+            if (ImGui::IsItemHovered())
+                gevrTooltip("Adds an optional Lasersword melee weapon (3D hilt mesh and SFX)\nwith deflection, throwing and dismemberment.");
+            if (!p.update.empty()) {
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Update")) gevrJavaCommand("modsCommand", "install:lasersword");
+            }
+            if (p.state == "installed") {
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Remove")) gevrJavaCommand("modsCommand", "remove:lasersword");
+            }
+        } else {
+            if (ImGui::SmallButton(p.state == "error" ? "Retry Lasersword" : "Get Lasersword"))
+                gevrJavaCommand("modsCommand", "install:lasersword");
+            if (ImGui::IsItemHovered())
+                gevrTooltip(p.state == "error" ? "%s" : "Adds an optional Lasersword melee weapon (3D hilt mesh and SFX).\nA small download.",
                                   p.message.c_str());
         }
         ImGui::PopID();

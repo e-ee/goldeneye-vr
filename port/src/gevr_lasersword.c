@@ -2,14 +2,26 @@
 
 #include <math.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define GEVR_LS_HOLD_SEC       0.22f
 #define GEVR_LS_DOUBLETAP_SEC  0.28f
 #define GEVR_LS_SLASH_SEC      0.26f
 #define GEVR_LS_BLOCK_COS      0.42f   /* ~65 deg half-cone */
-#define GEVR_LS_TAU            6.28318530718f
-#define GEVR_LS_SFX_VOICES     6
+#define GEVR_LS_SFX_VOICES     4
+#define GEVR_LS_MAX_TRIS       4096
+#define GEVR_LS_MAX_CLIP_SMPS  88200
+#define GEVR_LS_MAX_PACK_BYTES (4L * 1024L * 1024L)
+
+#ifdef __ANDROID__
+#define LS_DIR "/sdcard/Android/data/com.gevr.port/files/"
+#else
+#define LS_DIR ""
+#endif
 
 static float lsNormalize3(const float v[3], float out[3])
 {
@@ -407,17 +419,154 @@ void gevrLsInputReadFlat(int *rtDown, int *ltDown, int *isMouse)
 }
 
 /* -------------------------------------------------------------------------- */
-/* Procedural DSP Audio Synthesizer (22050 Hz stereo PCM)                     */
+/* Downloadable Asset Pack Loader (GEVRLS1\0: 3D hilt mesh + 5 PCM clips)     */
+/* -------------------------------------------------------------------------- */
+
+static const char *const s_lsPackFiles[] = {
+    LS_DIR "mods/lasersword.bin",
+    LS_DIR "texture-packs/lasersword/lasersword.bin",
+};
+
+static GevrLsPack s_pack;
+static time_t s_nextStatSec;
+
+static uint32_t lsRdU32(const unsigned char *p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static float lsRdF32(const unsigned char *p)
+{
+    uint32_t u = lsRdU32(p);
+    float f = 0.0f;
+    memcpy(&f, &u, 4);
+    return f;
+}
+
+static void lsFreePack(GevrLsPack *pk)
+{
+    if (!pk) return;
+    free(pk->verts);
+    for (int i = 0; i < GEVR_LS_CLIP_COUNT; i++) {
+        free(pk->clips[i]);
+    }
+    memset(pk, 0, sizeof(*pk));
+}
+
+void gevrLsPackUnload(void)
+{
+    lsFreePack(&s_pack);
+    s_nextStatSec = 0;
+}
+
+int gevrLsPackLoadFile(const char *path)
+{
+    if (!path || !*path) return 0;
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return 0; }
+    long size = ftell(f);
+    if (fseek(f, 0, SEEK_SET) != 0 || size < 24L || size > GEVR_LS_MAX_PACK_BYTES) {
+        fclose(f);
+        return 0;
+    }
+    unsigned char *raw = (unsigned char *)malloc((size_t)size);
+    if (!raw || fread(raw, 1, (size_t)size, f) != (size_t)size) {
+        free(raw);
+        fclose(f);
+        return 0;
+    }
+    fclose(f);
+
+    const unsigned char *p = raw;
+    const unsigned char *end = raw + size;
+    GevrLsPack next;
+    memset(&next, 0, sizeof(next));
+
+    if (memcmp(p, "GEVRLS1\0", 8) != 0) goto bad;
+    next.emitterOffsetCm = lsRdF32(p + 8);
+    next.bladeRadiusCm = lsRdF32(p + 12);
+    const uint32_t ntri = lsRdU32(p + 16);
+    const uint32_t nclip = lsRdU32(p + 20);
+    p += 24;
+
+    if (!isfinite(next.emitterOffsetCm) || next.emitterOffsetCm < 2.0f || next.emitterOffsetCm > 40.0f) goto bad;
+    if (!isfinite(next.bladeRadiusCm) || next.bladeRadiusCm < 0.4f || next.bladeRadiusCm > 8.0f) goto bad;
+    if (ntri < 1u || ntri > GEVR_LS_MAX_TRIS || nclip != GEVR_LS_CLIP_COUNT) goto bad;
+
+    const size_t nverts = (size_t)ntri * 3u;
+    if (nverts * 16u > (size_t)(end - p)) goto bad;
+    next.verts = (GevrLsVtx *)malloc(nverts * sizeof(GevrLsVtx));
+    if (!next.verts) goto bad;
+    next.triCount = (int)ntri;
+    for (size_t i = 0; i < nverts; i++, p += 16) {
+        for (int k = 0; k < 3; k++) {
+            next.verts[i].p[k] = lsRdF32(p + (size_t)k * 4u);
+            if (!isfinite(next.verts[i].p[k]) || fabsf(next.verts[i].p[k]) > 200.0f) goto bad;
+        }
+        memcpy(next.verts[i].rgba, p + 12, 4);
+    }
+
+    for (int c = 0; c < GEVR_LS_CLIP_COUNT; c++) {
+        if ((size_t)(end - p) < 8u) goto bad;
+        const uint32_t sr = lsRdU32(p);
+        const uint32_t cnt = lsRdU32(p + 4);
+        p += 8;
+        if (sr < 8000u || sr > 48000u || cnt < 1u || cnt > GEVR_LS_MAX_CLIP_SMPS) goto bad;
+        if ((size_t)cnt * 2u > (size_t)(end - p)) goto bad;
+        next.clips[c] = (short *)malloc((size_t)cnt * sizeof(short));
+        if (!next.clips[c]) goto bad;
+        next.clipRate[c] = (int)sr;
+        next.clipLen[c] = (int)cnt;
+        for (uint32_t i = 0; i < cnt; i++, p += 2) {
+            const uint16_t u = (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+            next.clips[c][i] = (short)(int16_t)u;
+        }
+    }
+
+    free(raw);
+    lsFreePack(&s_pack);
+    next.loaded = 1;
+    s_pack = next;
+    return 1;
+
+bad:
+    free(raw);
+    lsFreePack(&next);
+    return 0;
+}
+
+static const GevrLsPack *lsEnsurePack(void)
+{
+    if (s_pack.loaded) return &s_pack;
+    const time_t now = time(NULL);
+    if (s_nextStatSec != 0 && now < s_nextStatSec) return NULL;
+    s_nextStatSec = now + 2;
+    for (unsigned i = 0; i < (unsigned)(sizeof(s_lsPackFiles) / sizeof(s_lsPackFiles[0])); i++) {
+        if (gevrLsPackLoadFile(s_lsPackFiles[i])) return &s_pack;
+    }
+    return NULL;
+}
+
+int gevrLsAvailable(void)
+{
+    return lsEnsurePack() != NULL;
+}
+
+const GevrLsPack *gevrLsPackGet(void)
+{
+    return lsEnsurePack();
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pack Clip Stereo PCM Audio Mixer (22050 Hz)                                */
 /* -------------------------------------------------------------------------- */
 
 typedef struct {
     int active;
-    int id;
+    int clip;
+    float pos;
     float intensity;
-    float t;
-    float dur;
-    float p0;
-    float p1;
 } LsSfxVoice;
 
 static struct {
@@ -427,39 +576,30 @@ static struct {
     float swingSmooth;
     int thrownSpin;
     float humEnv;
-    float thrownEnv;
-    float phHum1;
-    float phHum2;
-    float phHumLfo;
-    float phThrown;
-    unsigned int rng;
+    float humPos;
     LsSfxVoice voices[GEVR_LS_SFX_VOICES];
     int nextVoice;
-} s_audio = { .rng = 0x2468ACE1u };
+} s_audio;
 
 static float lsClamp01(float x)
 {
     return x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x;
 }
 
-static float lsNoise(unsigned int *state)
+static float lsSampleClip(const short *smp, int len, float pos)
 {
-    *state = (*state) * 1664525u + 1013904223u;
-    const int s = (int)((*state >> 16) & 0xFFFFu) - 32768;
-    return (float)s * (1.0f / 32768.0f);
-}
-
-static float lsWrapPhase(float p)
-{
-    if (p >= GEVR_LS_TAU) p -= GEVR_LS_TAU * (float)((int)(p / GEVR_LS_TAU));
-    return p;
+    if (!smp || len <= 0) return 0.0f;
+    const int i0 = ((int)pos) % len;
+    const int i1 = (i0 + 1) % len;
+    const float frac = pos - (float)(int)pos;
+    const float a = (float)smp[i0] * (1.0f / 32768.0f);
+    const float b = (float)smp[i1] * (1.0f / 32768.0f);
+    return a + (b - a) * frac;
 }
 
 void gevrLsAudioReset(void)
 {
-    const unsigned int seed = s_audio.rng ? s_audio.rng : 0x2468ACE1u;
     memset(&s_audio, 0, sizeof(s_audio));
-    s_audio.rng = seed;
 }
 
 void gevrLsAudioSetState(int active, float bladeExtend, float swingSpeed01, int thrownSpinning)
@@ -477,127 +617,59 @@ void gevrLsAudioTrigger(int eventId, float intensity)
     if (intensity > 2.0f) intensity = 2.0f;
     LsSfxVoice *v = &s_audio.voices[s_audio.nextVoice];
     s_audio.nextVoice = (s_audio.nextVoice + 1) % GEVR_LS_SFX_VOICES;
-    memset(v, 0, sizeof(*v));
     v->active = 1;
-    v->id = eventId;
+    v->clip = eventId;
+    v->pos = 0.0f;
     v->intensity = intensity;
-    v->t = 0.0f;
-    switch (eventId) {
-        case GEVR_LS_SFX_IGNITE:  v->dur = 0.42f; break;
-        case GEVR_LS_SFX_SLASH:   v->dur = 0.28f; break;
-        case GEVR_LS_SFX_DEFLECT: v->dur = 0.26f; break;
-        case GEVR_LS_SFX_CLASH:   v->dur = 0.30f; break;
-        default:                  v->dur = 0.20f; break;
-    }
 }
 
 void gevrLsAudioMix(short *pcmStereo, int frames, int sampleRate)
 {
-    if (!pcmStereo || frames <= 0 || sampleRate <= 0) return;
+    if (!pcmStereo || frames <= 0 || sampleRate <= 0 || !s_pack.loaded) return;
 
     int anyVoice = 0;
     for (int i = 0; i < GEVR_LS_SFX_VOICES; i++) {
         if (s_audio.voices[i].active) { anyVoice = 1; break; }
     }
-    if (!s_audio.active && !anyVoice
-        && s_audio.humEnv < 1e-4f && s_audio.thrownEnv < 1e-4f) {
-        return;
-    }
+    if (!s_audio.active && !anyVoice && s_audio.humEnv < 1e-4f) return;
 
     const float dt = 1.0f / (float)sampleRate;
-    const float envStep = dt * 14.0f;
+    const int humLen = s_pack.clipLen[GEVR_LS_CLIP_HUM];
+    const float humStepBase = humLen > 0 ? (float)s_pack.clipRate[GEVR_LS_CLIP_HUM] * dt : 0.0f;
 
     for (int n = 0; n < frames; n++) {
-        const float humTgt = s_audio.active ? s_audio.bladeExtend : 0.0f;
-        const float thrTgt = (s_audio.active && s_audio.thrownSpin) ? 1.0f : 0.0f;
-
-        s_audio.humEnv += (humTgt - s_audio.humEnv) * envStep;
-        s_audio.thrownEnv += (thrTgt - s_audio.thrownEnv) * (dt * 18.0f);
+        const float humTgt = s_audio.active ? fmaxf(s_audio.bladeExtend, s_audio.thrownSpin ? 0.85f : 0.0f) : 0.0f;
+        s_audio.humEnv += (humTgt - s_audio.humEnv) * (dt * 14.0f);
         s_audio.swingSmooth += (s_audio.swingTarget - s_audio.swingSmooth) * (dt * 22.0f);
 
-        float sigL = 0.0f, sigR = 0.0f;
-
-        /* Dual-detuned blade hum + Doppler swing modulation */
-        if (s_audio.humEnv > 0.002f) {
-            const float sw = s_audio.swingSmooth;
-            const float fBase = 92.0f + sw * 46.0f;
-            s_audio.phHum1 = lsWrapPhase(s_audio.phHum1 + GEVR_LS_TAU * fBase * dt);
-            s_audio.phHum2 = lsWrapPhase(s_audio.phHum2 + GEVR_LS_TAU * (fBase * 2.015f + 1.8f) * dt);
-            s_audio.phHumLfo = lsWrapPhase(s_audio.phHumLfo + GEVR_LS_TAU * (6.2f + sw * 5.0f) * dt);
-
-            const float lfo = 0.86f + 0.14f * sinf(s_audio.phHumLfo);
-            const float o1 = sinf(s_audio.phHum1);
-            const float o2 = sinf(s_audio.phHum2);
-            const float hum = (0.58f * o1 + 0.28f * o2 + 0.14f * o1 * o2) * lfo;
-            const float amp = s_audio.humEnv * (0.045f + 0.095f * sw);
-            const float pan = 0.12f * sinf(s_audio.phHumLfo);
-            sigL += hum * amp * (1.0f - pan);
-            sigR += hum * amp * (1.0f + pan);
-        }
-
-        /* Thrown blade spin whoosh */
-        if (s_audio.thrownEnv > 0.002f) {
-            s_audio.phThrown = lsWrapPhase(s_audio.phThrown + GEVR_LS_TAU * 14.0f * dt);
-            const float mod = 0.5f + 0.5f * sinf(s_audio.phThrown);
-            const float tone = sinf(s_audio.phHum1 * 1.35f) * 0.75f;
-            const float whoosh = tone * mod * s_audio.thrownEnv * 0.095f;
-            const float pan = 0.45f * cosf(s_audio.phThrown);
-            sigL += whoosh * (1.0f - pan);
-            sigR += whoosh * (1.0f + pan);
+        float sig = 0.0f;
+        if (s_audio.humEnv > 0.002f && humLen > 0) {
+            const float pitch = 0.96f + 0.34f * s_audio.swingSmooth + (s_audio.thrownSpin ? 0.14f : 0.0f);
+            s_audio.humPos += humStepBase * pitch;
+            while (s_audio.humPos >= (float)humLen) s_audio.humPos -= (float)humLen;
+            sig += lsSampleClip(s_pack.clips[GEVR_LS_CLIP_HUM], humLen, s_audio.humPos)
+                 * s_audio.humEnv * (0.22f + 0.24f * s_audio.swingSmooth);
         }
 
         for (int i = 0; i < GEVR_LS_SFX_VOICES; i++) {
             LsSfxVoice *v = &s_audio.voices[i];
             if (!v->active) continue;
-            v->t += dt;
-            if (v->t >= v->dur) {
+            const int c = v->clip;
+            const int len = (c >= 0 && c < GEVR_LS_CLIP_COUNT) ? s_pack.clipLen[c] : 0;
+            if (len <= 0 || v->pos >= (float)(len - 1)) {
                 v->active = 0;
                 continue;
             }
-            const float u = v->t / v->dur;
-            float mono = 0.0f;
-            const float nz = lsNoise(&s_audio.rng);
-
-            if (v->id == GEVR_LS_SFX_IGNITE) {
-                const float f = 140.0f + 560.0f * (1.0f - (1.0f - u) * (1.0f - u));
-                v->p0 = lsWrapPhase(v->p0 + GEVR_LS_TAU * f * dt);
-                const float hissEnv = expf(-u * 6.5f);
-                const float sweepEnv = sinf(lsClamp01(u) * 3.14159f);
-                mono = (0.65f * nz * hissEnv + 0.55f * sinf(v->p0) * sweepEnv) * 0.24f;
-            } else if (v->id == GEVR_LS_SFX_SLASH) {
-                const float f = 110.0f + 160.0f * sinf(u * 3.14159f);
-                v->p0 = lsWrapPhase(v->p0 + GEVR_LS_TAU * f * dt);
-                const float env = sinf(u * 3.14159f);
-                mono = (0.70f * sinf(v->p0) + 0.30f * sinf(v->p0 * 2.02f) + 0.18f * nz) * env * 0.16f;
-            } else if (v->id == GEVR_LS_SFX_DEFLECT) {
-                const float f = 2200.0f * expf(-u * 3.4f) + 260.0f;
-                v->p0 = lsWrapPhase(v->p0 + GEVR_LS_TAU * f * dt);
-                const float env = expf(-u * 5.2f);
-                mono = (0.75f * sinf(v->p0) + 0.35f * nz * expf(-u * 11.0f)) * env * 0.22f;
-            } else if (v->id == GEVR_LS_SFX_CLASH) {
-                v->p0 = lsWrapPhase(v->p0 + GEVR_LS_TAU * 310.0f * dt);
-                v->p1 = lsWrapPhase(v->p1 + GEVR_LS_TAU * 437.0f * dt);
-                const float crackle = fabsf(nz) > 0.70f ? nz * 1.3f : nz * 0.35f;
-                const float env = expf(-u * 4.5f);
-                mono = (0.45f * sinf(v->p0 + 1.5f * sinf(v->p1)) + 0.65f * crackle) * env * 0.23f;
-            }
-
-            mono *= v->intensity;
-            sigL += mono;
-            sigR += mono;
+            sig += lsSampleClip(s_pack.clips[c], len, v->pos) * v->intensity * 0.42f;
+            v->pos += (float)s_pack.clipRate[c] * dt;
         }
 
-        const float baseL = (float)pcmStereo[n * 2 + 0] * (1.0f / 32768.0f);
-        const float baseR = (float)pcmStereo[n * 2 + 1] * (1.0f / 32768.0f);
-        float outL = baseL + sigL;
-        float outR = baseR + sigR;
-        if (outL > 1.0f) outL = 1.0f - 0.1f * expf(-(outL - 1.0f));
-        else if (outL < -1.0f) outL = -1.0f + 0.1f * expf(outL + 1.0f);
-        if (outR > 1.0f) outR = 1.0f - 0.1f * expf(-(outR - 1.0f));
-        else if (outR < -1.0f) outR = -1.0f + 0.1f * expf(outR + 1.0f);
-        const int iL = (int)(outL * 32767.0f);
-        const int iR = (int)(outR * 32767.0f);
-        pcmStereo[n * 2 + 0] = (short)(iL < -32767 ? -32767 : iL > 32767 ? 32767 : iL);
-        pcmStereo[n * 2 + 1] = (short)(iR < -32767 ? -32767 : iR > 32767 ? 32767 : iR);
+        for (int ch = 0; ch < 2; ch++) {
+            float out = (float)pcmStereo[n * 2 + ch] * (1.0f / 32768.0f) + sig;
+            if (out > 1.0f) out = 1.0f - 0.1f * expf(-(out - 1.0f));
+            else if (out < -1.0f) out = -1.0f + 0.1f * expf(out + 1.0f);
+            const int s = (int)(out * 32767.0f);
+            pcmStereo[n * 2 + ch] = (short)(s < -32767 ? -32767 : s > 32767 ? 32767 : s);
+        }
     }
 }
